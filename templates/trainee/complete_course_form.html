@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Complete Course: {{ assignment.course.name }}{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Complete Course: "{{ assignment.course.name }}"</h1>
+    <p class="text-lg text-gray-600 mb-8 text-center">
+        You are about to mark this course as fully completed.
+        {% if assignment.course.modules %}
+            Please ensure all modules are marked as completed before proceeding.
+        {% endif %}
+    </p>
+
+    <form method="POST" action="{{ url_for('complete_course', assignment_id=assignment.id) }}" class="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-6">
+            <label for="completion_badge_link" class="block text-gray-700 text-sm font-medium mb-2">Completion Badge/Certificate Link (Optional):</label>
+            <input type="url" id="completion_badge_link" name="completion_badge_link"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   placeholder="https://example.com/my-certificate"
+                   aria-label="Completion badge link input">
+            <p class="text-xs text-gray-500 mt-1">Provide a link to your completion badge or certificate if available.</p>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Confirm Course Completion
+            </button>
+        </div>
+    </form>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('view_assignment', assignment_id=assignment.id) }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Course Details
+        </a>
+    </div>
+{% endblock %}

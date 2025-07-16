@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Module{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Create New Module for "{{ course.name }}"</h1>
+    <form method="POST" action="{{ url_for('create_module', course_id=course.id) }}" class="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-5">
+            <label for="name" class="block text-gray-700 text-sm font-medium mb-2">Module Name:</label>
+            <input type="text" id="name" name="name" required
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Module name input">
+        </div>
+        <div class="mb-5">
+            <label for="description" class="block text-gray-700 text-sm font-medium mb-2">Description (Optional):</label>
+            <textarea id="description" name="description" rows="5"
+                      class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                      aria-label="Module description textarea"></textarea>
+        </div>
+        <div class="mb-6">
+            <label for="module_link" class="block text-gray-700 text-sm font-medium mb-2">Module Link (Optional, e.g., external URL):</label>
+            <input type="url" id="module_link" name="module_link"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   placeholder="https://example.com/module-content"
+                   aria-label="External module link input">
+            <p class="text-xs text-gray-500 mt-1">Provide a URL if the module content is hosted externally.</p>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Add Module
+            </button>
+        </div>
+    </form>
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('admin_view_course_modules', course_id=course.id) }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Modules
+        </a>
+    </div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}My Assignments{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">My Assignments</h1>
+
+    {% if assignments_with_status %}
+        <div class="space-y-6">
+            {% for item in assignments_with_status %}
+                {% set assignment = item.assignment %}
+                {% set alert_type = item.alert_type %}
+                {% set message = item.message %}
+
+                <div class="bg-white p-6 rounded-lg shadow-md border
+                    {% if alert_type == 'past_due' %}border-red-400{% elif alert_type == 'due_soon' %}border-yellow-400{% elif alert_type == 'completed' %}border-green-400{% else %}border-gray-200{% endif %}">
+                    
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">
+                        {% if assignment.course_id %}
+                            Course: {{ assignment.course.name }}
+                        {% elif assignment.assessment_id %}
+                            Assessment: {{ assignment.assessment.name }}
+                        {% else %}
+                            Assignment {{ assignment.id }}
+                        {% endif %}
+                    </h2>
+
+                    <p class="text-gray-600 mb-1">Assigned by: {{ assignment.assigner.username }} on {{ assignment.assigned_at.strftime('%Y-%m-%d') }}</p>
+                    
+                    {% if assignment.due_date %}
+                        <p class="text-gray-600 mb-3">Due Date: {{ assignment.due_date.strftime('%Y-%m-%d') }}</p>
+                    {% else %}
+                        <p class="text-gray-600 mb-3">Due Date: Not set</p>
+                    {% endif %}
+
+                    {# Alert Message for Due Date Status #}
+                    {% if alert_type == 'past_due' %}
+                        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded-md mb-3" role="alert">
+                            <p class="font-bold">Urgent!</p>
+                            <p>{{ message }}</p>
+                        </div>
+                    {% elif alert_type == 'due_soon' %}
+                        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3 rounded-md mb-3" role="alert">
+                            <p class="font-bold">Heads Up!</p>
+                            <p>{{ message }}</p>
+                        </div>
+                    {% elif alert_type == 'completed' %}
+                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 rounded-md mb-3" role="alert">
+                            <p class="font-bold">Great Job!</p>
+                            <p>{{ message }}</p>
+                        </div>
+                    {% elif alert_type == 'no_due_date' %}
+                         <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-3 rounded-md mb-3" role="alert">
+                            <p class="font-bold">Information:</p>
+                            <p>{{ message }}</p>
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('view_assignment', assignment_id=assignment.id) }}"
+                           class="inline-block bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 transition duration-300 shadow-sm">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-center text-gray-600 text-lg">No assignments found for you yet.</p>
+    {% endif %}
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('dashboard') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Dashboard
+        </a>
+    </div>
+{% endblock %}

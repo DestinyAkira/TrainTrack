@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome{% endblock %}
+
+{% block content %}
+    <h1 class="text-4xl font-bold text-gray-800 mb-6">Welcome to TrainTrack!</h1>
+    <p class="text-lg text-gray-600 mb-8">Your comprehensive training and assessment management system.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div class="p-6 bg-indigo-50 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-indigo-700 mb-3">Trainees</h2>
+            <p class="text-gray-700">Track and complete assigned assessments and courses.</p>
+        </div>
+        <div class="p-6 bg-green-50 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-green-700 mb-3">Support</h2>
+            <p class="text-gray-700">View trainee progress and provide assistance.</p>
+        </div>
+        <div class="p-6 bg-red-50 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-red-700 mb-3">Admins</h2>
+            <p class="text-gray-700">Manage users, create content, assign trainings, and grade assessments.</p>
+        </div>
+    </div>
+
+    {% if not current_user.is_authenticated %}
+        <div class="mt-10 text-center">
+            <p class="text-xl text-gray-700 mb-4">Ready to get started?</p>
+            <a href="{{ url_for('login') }}" class="inline-block bg-indigo-600 text-white px-8 py-4 rounded-lg text-xl font-semibold hover:bg-indigo-700 transition duration-300 shadow-lg">
+                Login Now
+            </a>
+        </div>
+    {% endif %}
+{% endblock %}

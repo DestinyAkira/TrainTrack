@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Assessment: {{ assessment.name }}{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Edit Assessment: "{{ assessment.name }}"</h1>
+    <form method="POST" action="{{ url_for('edit_assessment', assessment_id=assessment.id) }}" class="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-5">
+            <label for="name" class="block text-gray-700 text-sm font-medium mb-2">Assessment Name:</label>
+            <input type="text" id="name" name="name" value="{{ assessment.name }}" required
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Assessment name input">
+        </div>
+        <div class="mb-5">
+            <label for="description" class="block text-gray-700 text-sm font-medium mb-2">Description (Optional):</label>
+            <textarea id="description" name="description" rows="5"
+                      class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                      aria-label="Assessment description textarea">{{ assessment.description }}</textarea>
+        </div>
+        <div class="mb-5">
+            <label for="type" class="block text-gray-700 text-sm font-medium mb-2">Assessment Type:</label>
+            <select id="type" name="type" required
+                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                    aria-label="Assessment type select">
+                <option value="multiple_choice" {% if assessment.type == 'multiple_choice' %}selected{% endif %}>Multiple Choice</option>
+                <option value="open_ended" {% if assessment.type == 'open_ended' %}selected{% endif %}>Open-Ended</option>
+                <option value="true_false" {% if assessment.type == 'true_false' %}selected{% endif %}>True/False</option>
+            </select>
+        </div>
+        <div class="mb-6">
+            <label for="course_id" class="block text-gray-700 text-sm font-medium mb-2">Link to Course (Optional):</label>
+            <select id="course_id" name="course_id"
+                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                    aria-label="Link to course select">
+                <option value="">-- Select Course (Optional) --</option>
+                {% for course_item in courses %}
+                    <option value="{{ course_item.id }}" {% if assessment.course_id == course_item.id %}selected{% endif %}>{{ course_item.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Associate this assessment with a specific course.</p>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Update Assessment
+            </button>
+        </div>
+    </form>
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('admin_view_assessments') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Manage Assessments
+        </a>
+    </div>
+{% endblock %}

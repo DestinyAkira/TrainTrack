@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.Python
+env/
+venv/
+*.env
+.flaskenv
+instance/
+.vscode/
+
+# Database
+*.db # This will ignore your traintrack.db file
+/traintrack.db # More specific for your current db file
+
+# Flask specific
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.flaskenv
+
+# Specific to your app.py's default passcodes if you haven't moved them to environment variables
+# If you are using actual environment variables, these lines are not strictly needed.
+# But it's good practice to ensure no sensitive info accidentally gets committed.
+# If you hardcoded passcodes in app.py for dev, ensure they are NOT the production ones.
+# For production, always use environment variables.
+# Remove or comment out these if your passcodes are truly external.
+# ADMIN_PASSCODE
+# SUPPORT_PASSCODE

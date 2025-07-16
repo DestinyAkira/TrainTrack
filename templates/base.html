@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrainTrack - {% block title %}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f6; /* Light gray background */
+        }
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .flash-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .flash-message.danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .flash-message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .flash-message button {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: inherit;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+    <nav class="bg-gray-800 p-4 shadow-md">
+        <div class="container mx-auto flex flex-wrap items-center justify-between">
+            {# Back Button #}
+            <button onclick="history.back()" class="text-white text-lg font-bold rounded-md px-3 py-1 hover:bg-gray-700 transition duration-300 mr-4" aria-label="Go back">
+                &larr; Back
+            </button>
+            
+            <a href="{{ url_for('index') }}" class="text-white text-2xl font-bold rounded-md px-3 py-1 hover:bg-gray-700 transition duration-300">TrainTrack</a>
+            
+            {# Search Bar in Navbar #}
+            <div class="flex-grow mx-4 max-w-xl">
+                <form action="{{ url_for('search') }}" method="GET" class="flex items-center">
+                    <input type="search" name="query" placeholder="Search..."
+                           class="flex-grow py-1.5 px-3 rounded-l-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                           aria-label="Search input" value="{{ request.args.get('query', '') }}">
+                    <button type="submit"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-4 rounded-r-md focus:outline-none focus:shadow-outline transition duration-300">
+                        Search
+                    </button>
+                </form>
+            </div>
+
+            <div class="flex items-center space-x-4 mt-2 md:mt-0">
+                {% if current_user.is_authenticated %}
+                    {# Notifications Link #}
+                    <a href="{{ url_for('view_notifications') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300 relative">
+                        Notifications
+                        {% if unread_notifications_count > 0 %}
+                            <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                {{ unread_notifications_count }}
+                            </span>
+                        {% endif %}
+                    </a>
+                    <span class="text-gray-300">|</span>
+                    <a href="{{ url_for('dashboard') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300">Dashboard</a>
+                    <span class="text-gray-300">|</span>
+                    <a href="{{ url_for('logout') }}" class="bg-red-600 text-white px-4 py-1.5 rounded-md hover:bg-red-700 transition duration-300">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300">Login</a>
+                    <a href="{{ url_for('register') }}" class="bg-indigo-600 text-white px-4 py-1.5 rounded-md hover:bg-indigo-700 transition duration-300">Register</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto mt-8 p-4 flex-grow">
+        {# Flash Messages #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}" role="alert">
+                            <span>{{ message }}</span>
+                            <button type="button" onclick="this.parentElement.style.display='none';" aria-label="Close alert">
+                                &times;
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center p-4 mt-8 shadow-inner">
+        <div class="container mx-auto">
+            <p>&copy; {{ current_year }} TrainTrack. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

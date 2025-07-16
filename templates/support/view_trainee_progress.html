@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Progress for {{ trainee.username }}{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Progress for "{{ trainee.username }}"</h1>
+    <p class="text-lg text-gray-600 mb-8 text-center">Review the assignments and their current status.</p>
+
+    {% if progress_data %}
+        <div class="space-y-8">
+            {% for item in progress_data %}
+                {% set assignment = item.assignment %}
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h2 class="text-xl font-semibold text-indigo-700 mb-3">
+                        {% if item.type == 'course' %}
+                            Course: {{ item.details.name }}
+                        {% elif item.type == 'assessment' %}
+                            Assessment: {{ item.details.name }}
+                        {% endif %}
+                        <span class="text-sm text-gray-500 ml-2">(Assigned by: {{ assignment.assigner.username }} on {{ assignment.assigned_at.strftime('%Y-%m-%d') }})</span>
+                    </h2>
+
+                    <p class="text-gray-700 mb-2">Status: <span class="font-medium {% if assignment.status == 'completed' or assignment.status == 'graded' %}text-green-600{% elif assignment.status == 'submitted_for_grading' %}text-yellow-600{% else %}text-red-600{% endif %}">
+                        {{ assignment.status.replace('_', ' ').title() }}
+                    </span></p>
+                    
+                    {% if assignment.due_date %}
+                        <p class="text-gray-700 mb-2">Due Date: {{ assignment.due_date.strftime('%Y-%m-%d') }}</p>
+                    {% endif %}
+                    
+                    {% if assignment.completion_date %}
+                        <p class="text-gray-700 mb-2">Completed On: {{ assignment.completion_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                    {% endif %}
+
+                    {% if assignment.score is not none %}
+                        <p class="text-gray-700 mb-2">Score: <span class="font-bold">{{ assignment.score | round(2) }}%</span></p>
+                    {% endif %}
+
+                    {% if assignment.completion_badge_link %}
+                        <p class="text-gray-700 mb-2">Completion Badge: <a href="{{ assignment.completion_badge_link }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">View Badge</a></p>
+                    {% endif %}
+
+                    {# Display Modules for Courses #}
+                    {% if item.type == 'course' and item.modules %}
+                        <h3 class="text-lg font-semibold text-gray-700 mt-4 mb-2">Modules:</h3>
+                        <ul class="list-disc list-inside ml-4 space-y-1">
+                            {% for module_info in item.modules %}
+                                <li class="text-gray-700">
+                                    {{ module_info.module.name }} - 
+                                    {% if module_info.is_completed %}
+                                        <span class="text-green-600">Completed</span> on {{ module_info.completed_at.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        <span class="text-red-600">Not Completed</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    {# Display Submissions for Assessments #}
+                    {% if item.type == 'assessment' and item.submissions %}
+                        <h3 class="text-lg font-semibold text-gray-700 mt-4 mb-2">Submissions:</h3>
+                        <div class="overflow-x-auto bg-white rounded-lg shadow-sm">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Graded By</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    {% for sub_info in item.submissions %}
+                                        {% set submission = sub_info.submission %}
+                                        {% set question = sub_info.question %}
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 max-w-xs">{{ question.text }}</td>
+                                            <td class="px-6 py-4 whitespace-normal text-sm text-gray-500 max-w-xs">{{ submission.answer_text if submission.answer_text else 'N/A' }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {% if submission.is_correct is true %}
+                                                    <span class="text-green-600">Correct</span>
+                                                {% elif submission.is_correct is false %}
+                                                    <span class="text-red-600">Incorrect</span>
+                                                {% else %}
+                                                    <span class="text-gray-500">Pending</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {% if submission.grade is not none %}
+                                                    {{ submission.grade | round(2) }} / {{ question.points }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {% if submission.grader %}
+                                                    {{ submission.grader.username }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-center text-gray-600 text-lg">No assignments found for this trainee.</p>
+    {% endif %}
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('admin_view_users') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Manage Users
+        </a>
+    </div>
+{% endblock %}

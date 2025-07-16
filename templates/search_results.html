@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Search Results</h1>
+
+    {% if query %}
+        <p class="text-lg text-gray-600 mb-8 text-center">Results for: <span class="font-semibold text-indigo-700">"{{ query }}"</span></p>
+    {% else %}
+        <p class="text-lg text-gray-600 mb-8 text-center">Please enter a search query.</p>
+    {% endif %}
+
+    <div class="space-y-8">
+        {# Users Results #}
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-blue-800 mb-4">Users Found ({{ results.users|length }})</h2>
+            {% if results.users %}
+                <ul class="list-disc list-inside space-y-2">
+                    {% for user_item in results.users %}
+                        <li class="text-gray-700">
+                            <strong>{{ user_item.username }}</strong> ({{ user_item.role.capitalize() }})
+                            {% if user_item.role == 'trainee' and current_user.role == 'admin' %}
+                                <a href="{{ url_for('admin_view_trainee_progress', trainee_id=user_item.id) }}" class="text-indigo-600 hover:underline ml-2 text-sm">(View Progress)</a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-gray-600">No users found matching your query.</p>
+            {% endif %}
+        </div>
+
+        {# Courses Results #}
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-purple-800 mb-4">Courses Found ({{ results.courses|length }})</h2>
+            {% if results.courses %}
+                <ul class="list-disc list-inside space-y-2">
+                    {% for course in results.courses %}
+                        <li class="text-gray-700">
+                            <strong>{{ course.name }}</strong> - {{ course.description if course.description else 'No description.' }}
+                            {% if course.course_link %}
+                                <a href="{{ course.course_link }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline ml-2 text-sm">(Link)</a>
+                            {% endif %}
+                            {% if current_user.role == 'admin' %}
+                                <a href="{{ url_for('edit_course', course_id=course.id) }}" class="text-blue-600 hover:underline ml-2 text-sm">(Edit)</a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-gray-600">No courses found matching your query.</p>
+            {% endif %}
+        </div>
+
+        {# Assessments Results #}
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-green-800 mb-4">Assessments Found ({{ results.assessments|length }})</h2>
+            {% if results.assessments %}
+                <ul class="list-disc list-inside space-y-2">
+                    {% for assessment in results.assessments %}
+                        <li class="text-gray-700">
+                            <strong>{{ assessment.name }}</strong> ({{ assessment.type.replace('_', ' ').title() }}) - {{ assessment.description if assessment.description else 'No description.' }}
+                            {% if assessment.course %}
+                                <span class="text-sm text-gray-500 ml-2">(Course: {{ assessment.course.name }})</span>
+                            {% endif %}
+                            {% if current_user.role == 'admin' %}
+                                <a href="{{ url_for('edit_assessment', assessment_id=assessment.id) }}" class="text-blue-600 hover:underline ml-2 text-sm">(Edit)</a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-gray-600">No assessments found matching your query.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('dashboard') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Dashboard
+        </a>
+    </div>
+{% endblock %}

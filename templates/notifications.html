@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}My Notifications{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">My Notifications</h1>
+
+    {% if notifications %}
+        <div class="space-y-4 max-w-2xl mx-auto">
+            {% for notification in notifications %}
+                <div class="p-4 rounded-lg shadow-sm flex items-center justify-between
+                    {% if notification.is_read %}bg-gray-100 text-gray-700{% else %}bg-blue-50 text-blue-800 font-semibold{% endif %}">
+                    
+                    <div>
+                        <p class="text-lg">{{ notification.message }}</p>
+                        <p class="text-sm text-gray-500 mt-1">
+                            Received: {{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% if notification.sender %}
+                                from {{ notification.sender.username }}
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    {% if not notification.is_read %}
+                        <a href="{{ url_for('mark_notification_read', notification_id=notification.id) }}"
+                           class="bg-indigo-600 text-white px-3 py-1 rounded-md text-sm hover:bg-indigo-700 transition duration-300">
+                            Mark as Read
+                        </a>
+                    {% else %}
+                        <span class="text-green-600 text-sm">Read</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-center text-gray-600 text-lg">You have no notifications.</p>
+    {% endif %}
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('dashboard') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Dashboard
+        </a>
+    </div>
+{% endblock %}

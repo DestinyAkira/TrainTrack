@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Add Question to {{ assessment.name }}{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Add Question to "{{ assessment.name }}"</h1>
+    <form method="POST" action="{{ url_for('create_question', assessment_id=assessment.id) }}" class="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-5">
+            <label for="text" class="block text-gray-700 text-sm font-medium mb-2">Question Text:</label>
+            <textarea id="text" name="text" rows="4" required
+                      class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                      aria-label="Question text textarea"></textarea>
+        </div>
+        <div class="mb-5">
+            <label for="type" class="block text-gray-700 text-sm font-medium mb-2">Question Type:</label>
+            <select id="type" name="type" required
+                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                    aria-label="Question type select">
+                <option value="multiple_choice">Multiple Choice</option>
+                <option value="open_ended">Open-Ended</option>
+                <option value="true_false">True/False</option>
+            </select>
+        </div>
+        <div class="mb-5">
+            <label for="points" class="block text-gray-700 text-sm font-medium mb-2">Points:</label>
+            <input type="number" id="points" name="points" required min="1" value="1"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Points input">
+        </div>
+        <div class="mb-5" id="options-field" style="display: none;">
+            <label for="options" class="block text-gray-700 text-sm font-medium mb-2">Options (one per line):</label>
+            <textarea id="options" name="options" rows="4"
+                      class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                      aria-label="Options textarea"></textarea>
+            <p class="text-xs text-gray-500 mt-1">For Multiple Choice/True-False questions.</p>
+        </div>
+        <div class="mb-6" id="correct-answer-field" style="display: none;">
+            <label for="correct_answer" class="block text-gray-700 text-sm font-medium mb-2">Correct Answer:</label>
+            <input type="text" id="correct_answer" name="correct_answer"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Correct answer input">
+            <p class="text-xs text-gray-500 mt-1">For Multiple Choice/True-False questions. Must match one of the options exactly or 'True'/'False'.</p>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Add Question
+            </button>
+        </div>
+    </form>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('edit_assessment', assessment_id=assessment.id) }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Edit Assessment
+        </a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const questionTypeSelect = document.getElementById('type');
+            const optionsField = document.getElementById('options-field');
+            const optionsInput = document.getElementById('options');
+            const correctAnswerField = document.getElementById('correct-answer-field');
+            const correctAnswerInput = document.getElementById('correct_answer');
+
+            function toggleQuestionFields() {
+                if (questionTypeSelect.value === 'multiple_choice' || questionTypeSelect.value === 'true_false') {
+                    optionsField.style.display = 'block';
+                    optionsInput.setAttribute('required', 'required');
+                    correctAnswerField.style.display = 'block';
+                    correctAnswerInput.setAttribute('required', 'required');
+                } else {
+                    optionsField.style.display = 'none';
+                    optionsInput.removeAttribute('required');
+                    optionsInput.value = ''; // Clear value when hidden
+                    correctAnswerField.style.display = 'none';
+                    correctAnswerInput.removeAttribute('required');
+                    correctAnswerInput.value = ''; // Clear value when hidden
+                }
+            }
+
+            // Initial call to set visibility based on default selected option
+            toggleQuestionFields();
+
+            // Add event listener for changes
+            questionTypeSelect.addEventListener('change', toggleQuestionFields);
+        });
+    </script>
+{% endblock %}
