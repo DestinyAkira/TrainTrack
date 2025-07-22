@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Learning Paths{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Manage Learning Paths</h1>
+
+    {% if learning_paths %}
+        <div class="overflow-x-auto bg-white rounded-lg shadow-md">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Name
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Description
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Courses Included
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created By
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for path in learning_paths %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {{ path.name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ path.description if path.description else 'N/A' }}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            {% if path.courses %}
+                                <ul class="list-disc list-inside">
+                                {% for course in path.courses %}
+                                    <li>{{ course.name }}</li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                No courses added yet.
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ path.path_creator.username }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <a href="{{ url_for('edit_learning_path', path_id=path.id) }}" class="text-blue-600 hover:text-blue-900 mr-4">Edit</a>
+                            <a href="#" class="text-red-600 hover:text-red-900">Delete</a> {# TODO: Implement delete functionality #}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-center text-gray-600 text-lg">No learning paths found. <a href="{{ url_for('create_learning_path') }}" class="text-indigo-600 hover:underline">Create one now!</a></p>
+    {% endif %}
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('create_learning_path') }}" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md font-medium hover:bg-indigo-700 transition duration-300 shadow-md">
+            Create New Learning Path
+        </a>
+    </div>
+{% endblock %}

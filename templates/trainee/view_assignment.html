@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Assignment Details{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Loading Assignment Details...</h1>
+    <p class="text-center text-gray-600">You should be redirected to the specific assignment content shortly.</p>
+    <p class="text-center text-gray-600">If you are seeing this message for more than a few seconds, there might be an issue with the assignment type or a server-side error.</p>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('my_assignments') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to My Assignments
+        </a>
+    </div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Learning Path{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Create New Learning Path</h1>
+    <form method="POST" action="{{ url_for('create_learning_path') }}" class="max-w-xl mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-5">
+            <label for="name" class="block text-gray-700 text-sm font-medium mb-2">Learning Path Name:</label>
+            <input type="text" id="name" name="name" required
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Learning path name input">
+        </div>
+        <div class="mb-5">
+            <label for="description" class="block text-gray-700 text-sm font-medium mb-2">Description (Optional):</label>
+            <textarea id="description" name="description" rows="4"
+                      class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                      aria-label="Learning path description textarea"></textarea>
+        </div>
+        <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-medium mb-2">Select Courses to Include (Multi-select):</label>
+            {% if courses %}
+                <div class="border border-gray-300 rounded-md p-3 max-h-60 overflow-y-auto bg-white">
+                    {% for course in courses %}
+                        <div class="flex items-center mb-2">
+                            <input type="checkbox" id="course_{{ course.id }}" name="courses" value="{{ course.id }}"
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                   aria-label="Select course {{ course.name }}">
+                            <label for="course_{{ course.id }}" class="ml-2 text-gray-700">{{ course.name }} ({{ course.domain if course.domain else 'N/A' }})</label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Select one or more courses to add to this learning path.</p>
+            {% else %}
+                <p class="text-gray-600">No courses available. Please create some courses first.</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Create Learning Path
+            </button>
+        </div>
+    </form>
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('admin_view_learning_paths') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Manage Learning Paths
+        </a>
+    </div>
+{% endblock %}

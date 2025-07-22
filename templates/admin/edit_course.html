@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Course: {{ course.name }}{% endblock %}
+{% block title %}Edit Course{% endblock %}
 
 {% block content %}
     <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Edit Course: "{{ course.name }}"</h1>
-    <form method="POST" action="{{ url_for('edit_course', course_id=course.id) }}" class="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+    <form method="POST" action="{{ url_for('edit_course', course_id=course.id) }}" class="max-w-xl mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
         <div class="mb-5">
             <label for="name" class="block text-gray-700 text-sm font-medium mb-2">Course Name:</label>
             <input type="text" id="name" name="name" value="{{ course.name }}" required
@@ -13,17 +13,30 @@
         </div>
         <div class="mb-5">
             <label for="description" class="block text-gray-700 text-sm font-medium mb-2">Description (Optional):</label>
-            <textarea id="description" name="description" rows="5"
+            <textarea id="description" name="description" rows="4"
                       class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
                       aria-label="Course description textarea">{{ course.description }}</textarea>
         </div>
-        <div class="mb-6">
-            <label for="course_link" class="block text-gray-700 text-sm font-medium mb-2">Course Link (Optional, e.g., external URL):</label>
-            <input type="url" id="course_link" name="course_link" value="{{ course.course_link }}"
+        <div class="mb-5">
+            <label for="course_link" class="block text-gray-700 text-sm font-medium mb-2">External Course Link (Optional):</label>
+            <input type="url" id="course_link" name="course_link" value="{{ course.course_link if course.course_link else '' }}"
                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
-                   placeholder="https://example.com/your-course"
+                   placeholder="e.g., https://example.com/course-content"
                    aria-label="External course link input">
-            <p class="text-xs text-gray-500 mt-1">Provide a URL if the course content is hosted externally.</p>
+        </div>
+        <div class="mb-6">
+            <label for="domain" class="block text-gray-700 text-sm font-medium mb-2">Domain (Type or Select):</label>
+            <input type="text" id="domain" name="domain" list="domain-options"
+                   value="{{ course.domain if course.domain else '' }}"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   placeholder="e.g., Data Collection"
+                   aria-label="Course domain input">
+            <datalist id="domain-options">
+                {% for dom in domains %}
+                    <option value="{{ dom }}">
+                {% endfor %}
+            </datalist>
+            <p class="text-xs text-gray-500 mt-1">Select an existing domain or type a new one.</p>
         </div>
         <div class="flex items-center justify-between">
             <button type="submit"
@@ -32,9 +45,4 @@
             </button>
         </div>
     </form>
-    <div class="mt-8 text-center">
-        <a href="{{ url_for('admin_view_courses') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
-            Back to Manage Courses
-        </a>
-    </div>
 {% endblock %}

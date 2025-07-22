@@ -8,6 +8,8 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta # Import date and timedelta for date comparisons
 from functools import wraps # Import wraps for decorators
+from sqlalchemy import inspect # Import inspect for database schema introspection
+from sqlalchemy.orm import relationship # Import relationship for many-to-many
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -29,6 +31,9 @@ login_manager.login_message_category = 'info'
 # Define passcodes for admin and support roles (use environment variables in production)
 ADMIN_PASSCODE = os.environ.get('ADMIN_PASSCODE', 'admincode') # Default for dev
 SUPPORT_PASSCODE = os.environ.get('SUPPORT_PASSCODE', 'supportcode') # Default for dev
+
+# Define predefined domains
+PREDEFINED_DOMAINS = ['Data Collection', 'Data Cleaning', 'Data Engineering', 'Compliance', 'Marketing', 'Sales', 'Human Resources', 'Finance']
 
 # --- Jinja2 Custom Filters ---
 @app.template_filter('from_json')
@@ -83,6 +88,12 @@ def trainee_required(f):
 
 # --- Database Models ---
 
+# Association table for LearningPath and Course (Many-to-Many)
+learning_path_courses = db.Table('learning_path_courses',
+    db.Column('learning_path_id', db.Integer, db.ForeignKey('learning_path.id'), primary_key=True),
+    db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
+)
+
 class User(UserMixin, db.Model):
     """
     User model representing a user in the TrainTrack application.
@@ -93,6 +104,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     # Roles: 'admin', 'support', 'trainee'
     role = db.Column(db.String(20), nullable=False, default='trainee')
+    domain = db.Column(db.String(50), nullable=True) # New field for trainee/admin domain
 
     # Relationships
     # User can be assigned many assignments (as trainee)
@@ -101,6 +113,8 @@ class User(UserMixin, db.Model):
     created_courses = db.relationship('Course', foreign_keys='Course.created_by_id', backref='creator', lazy=True)
     # User (admin) can create many assessments
     created_assessments = db.relationship('Assessment', foreign_keys='Assessment.created_by_id', backref='assessor_creator', lazy=True)
+    # User (admin) can create many learning paths
+    created_learning_paths = db.relationship('LearningPath', foreign_keys='LearningPath.created_by_id', backref='path_creator', lazy=True)
     # User (admin) can assign many assignments
     assigned_assignments = db.relationship('Assignment', foreign_keys='Assignment.assigned_by_id', backref='assigner', lazy=True)
     # User can receive many notifications
@@ -131,6 +145,7 @@ class Course(db.Model):
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
     course_link = db.Column(db.String(255), nullable=True) # New field for external link
+    domain = db.Column(db.String(50), nullable=True) # Changed from 'category' to 'domain'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Admin who created it
 
@@ -138,6 +153,9 @@ class Course(db.Model):
     assessments = db.relationship('Assessment', backref='course', lazy=True)
     assignments = db.relationship('Assignment', backref='course', lazy=True)
     modules = db.relationship('Module', backref='course', lazy=True) # New relationship for modules
+    
+    # Many-to-many relationship with LearningPath
+    learning_paths = relationship('LearningPath', secondary=learning_path_courses, back_populates='courses')
 
     def __repr__(self):
         return f'<Course {self.name}>'
@@ -213,14 +231,33 @@ class Question(db.Model):
     def __repr__(self):
         return f'<Question {self.id} for Assessment {self.assessment_id}>'
 
+class LearningPath(db.Model):
+    """
+    LearningPath model representing a collection of courses.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    # Many-to-many relationship with Course
+    courses = relationship('Course', secondary=learning_path_courses, back_populates='learning_paths')
+    assignments = db.relationship('Assignment', backref='learning_path', lazy=True)
+
+
+    def __repr__(self):
+        return f'<LearningPath {self.name}>'
+
 class Assignment(db.Model):
     """
-    Assignment model to link a trainee to a course or an assessment.
+    Assignment model to link a trainee to a course, an assessment, or a learning path.
     """
     id = db.Column(db.Integer, primary_key=True)
     trainee_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True) # Either course_id or assessment_id must be set
-    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment.id'), nullable=True) # Either course_id or assessment_id must be set
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True) # Either course_id or assessment_id or learning_path_id must be set
+    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment.id'), nullable=True) # Either course_id or assessment_id or learning_path_id must be set
+    learning_path_id = db.Column(db.Integer, db.ForeignKey('learning_path.id'), nullable=True) # New field for learning path assignment
     assigned_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Admin who assigned it
     assigned_at = db.Column(db.DateTime, default=datetime.utcnow)
     due_date = db.Column(db.DateTime, nullable=True)
@@ -280,7 +317,8 @@ def load_user(user_id):
     Loads a user from the database given their user ID.
     Required by Flask-Login.
     """
-    return User.query.get(int(user_id))
+    # Fix: Use db.session.get() instead of User.query.get()
+    return db.session.get(User, int(user_id))
 
 # --- Context Processor for Unread Notifications ---
 @app.context_processor
@@ -340,36 +378,61 @@ def register():
         return redirect(url_for('dashboard'))
 
     current_year = datetime.now().year # Get current year for footer
+    
+    # Get all unique domains for the datalist, including predefined ones
+    existing_domains = db.session.query(Course.domain).distinct().all()
+    existing_domains = [d[0] for d in existing_domains if d[0] is not None]
+    
+    # Combine existing domains with predefined ones, remove duplicates, and sort
+    all_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_domains)))
+
 
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         role = request.form.get('role')
         passcode = request.form.get('passcode')
+        user_domain = request.form.get('user_domain') # New: Get user domain (for trainee or admin)
 
         # Basic validation
         if not username or not password or not role:
             flash('Please fill in all required fields.', 'danger')
-            return render_template('register.html', title='Register', current_year=current_year)
+            return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
 
         if User.query.filter_by(username=username).first():
             flash('Username already exists. Please choose a different one.', 'danger')
-            return render_template('register.html', title='Register', current_year=current_year)
+            return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
 
         # Role-specific passcode check
-        if role == 'admin' and passcode != ADMIN_PASSCODE:
-            flash('Incorrect passcode for Admin registration.', 'danger')
-            return render_template('register.html', title='Register', current_year=current_year)
-        elif role == 'support' and passcode != SUPPORT_PASSCODE:
-            flash('Incorrect passcode for Support registration.', 'danger')
-            return render_template('register.html', title='Register', current_year=current_year)
+        if role == 'admin':
+            if passcode != ADMIN_PASSCODE:
+                flash('Incorrect passcode for Admin registration.', 'danger')
+                return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
+            if not user_domain: # Admins now also require a domain
+                flash('Please provide a domain for Admin registration.', 'danger')
+                return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
+        elif role == 'support':
+            if passcode != SUPPORT_PASSCODE:
+                flash('Incorrect passcode for Support registration.', 'danger')
+                return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
+        elif role == 'trainee':
+            if not user_domain: # Trainees require a domain
+                flash('Please provide a domain for trainee registration.', 'danger')
+                return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
         elif role not in ['admin', 'support', 'trainee']:
             flash('Invalid role selected.', 'danger')
-            return render_template('register.html', title='Register', current_year=current_year)
+            return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
+        
 
         # Create new user
         new_user = User(username=username, role=role)
         new_user.set_password(password)
+        
+        # Set domain for both trainees and admins
+        if role in ['trainee', 'admin']:
+            new_user.domain = user_domain 
+        else:
+            new_user.domain = None # Ensure domain is None for support users
 
         try:
             db.session.add(new_user)
@@ -381,7 +444,7 @@ def register():
             flash(f'An error occurred during registration: {e}', 'danger')
             app.logger.error(f"Registration error: {e}") # Log the error for debugging
 
-    return render_template('register.html', title='Register', current_year=current_year)
+    return render_template('register.html', title='Register', current_year=current_year, domains=all_domains)
 
 
 @app.route('/dashboard')
@@ -397,11 +460,11 @@ def dashboard():
     leaderboard_data = []
 
     if current_user.role == 'admin':
-        dashboard_data['total_trainees'] = User.query.filter_by(role='trainee').count()
-        dashboard_data['assignments_awaiting_grading'] = Assignment.query.filter_by(status='submitted_for_grading').count()
+        dashboard_data['total_trainees'] = db.session.query(User).filter_by(role='trainee').count()
+        dashboard_data['assignments_awaiting_grading'] = db.session.query(Assignment).filter_by(status='submitted_for_grading').count()
         
         # Count overdue assessments for admins
-        overdue_assessments = Assignment.query.filter(
+        overdue_assessments = db.session.query(Assignment).filter(
             Assignment.assessment_id.isnot(None), # Ensure it's an assessment
             Assignment.due_date < datetime.utcnow(),
             Assignment.status.in_(['assigned', 'in_progress', 'submitted_for_grading'])
@@ -409,7 +472,7 @@ def dashboard():
         dashboard_data['overdue_assessments'] = overdue_assessments
 
         # Count overdue courses for admins
-        overdue_courses = Assignment.query.filter(
+        overdue_courses = db.session.query(Assignment).filter(
             Assignment.course_id.isnot(None), # Ensure it's a course
             Assignment.due_date < datetime.utcnow(),
             Assignment.status.in_(['assigned', 'in_progress']) # Courses are typically 'assigned' or 'in_progress'
@@ -417,23 +480,23 @@ def dashboard():
         dashboard_data['overdue_courses'] = overdue_courses
 
         # Count active assessments for admins
-        active_assessments = Assignment.query.filter(
+        active_assessments = db.session.query(Assignment).filter(
             Assignment.assessment_id.isnot(None),
             Assignment.status.in_(['assigned', 'in_progress'])
         ).count()
         dashboard_data['active_assessments'] = active_assessments
 
         # Count active courses for admins
-        active_courses = Assignment.query.filter(
+        active_courses = db.session.query(Assignment).filter(
             Assignment.course_id.isnot(None),
             Assignment.status.in_(['assigned', 'in_progress'])
         ).count()
         dashboard_data['active_courses'] = active_courses
 
         # Prepare leaderboard data for admin
-        trainees = User.query.filter_by(role='trainee').all()
+        trainees = db.session.query(User).filter_by(role='trainee').all()
         for trainee in trainees:
-            completed_assessments = Assignment.query.filter(
+            completed_assessments = db.session.query(Assignment).filter(
                 Assignment.trainee_id == trainee.id,
                 Assignment.assessment_id.isnot(None),
                 Assignment.status.in_(['completed', 'graded'])
@@ -457,25 +520,25 @@ def dashboard():
 
 
     elif current_user.role == 'support':
-        dashboard_data['total_trainees'] = User.query.filter_by(role='trainee').count()
+        dashboard_data['total_trainees'] = db.session.query(User).filter_by(role='trainee').count()
         
         # Count active assignments for support (assigned or in_progress)
-        active_assignments = Assignment.query.filter(
+        active_assignments = db.session.query(Assignment).filter(
             Assignment.status.in_(['assigned', 'in_progress'])
         ).count()
         dashboard_data['active_assignments'] = active_assignments
 
         # Count overdue assignments (assessments + courses) for support
-        overdue_assignments_total = Assignment.query.filter(
+        overdue_assignments_total = db.session.query(Assignment).filter(
             Assignment.due_date < datetime.utcnow(),
             Assignment.status.in_(['assigned', 'in_progress', 'submitted_for_grading'])
         ).count()
         dashboard_data['overdue_assignments'] = overdue_assignments_total
 
         # Prepare leaderboard data for support (same as admin)
-        trainees = User.query.filter_by(role='trainee').all()
+        trainees = db.session.query(User).filter_by(role='trainee').all()
         for trainee in trainees:
-            completed_assessments = Assignment.query.filter(
+            completed_assessments = db.session.query(Assignment).filter(
                 Assignment.trainee_id == trainee.id,
                 Assignment.assessment_id.isnot(None),
                 Assignment.status.in_(['completed', 'graded'])
@@ -517,11 +580,27 @@ def dashboard():
 @admin_required
 def admin_view_courses():
     """
-    Allows admins to view all courses.
+    Allows admins to view all courses, with optional filtering by domain.
     """
     current_year = datetime.now().year
-    courses = Course.query.all()
-    return render_template('admin/view_courses.html', title='Manage Courses', courses=courses, current_year=current_year)
+    selected_domain = request.args.get('domain') # Changed from 'category' to 'domain'
+    
+    if selected_domain and selected_domain != 'all':
+        courses = db.session.query(Course).filter_by(domain=selected_domain).all() # Changed from 'category' to 'domain'
+    else:
+        courses = db.session.query(Course).all()
+    
+    # Get all unique domains for the filter dropdown
+    domains = db.session.query(Course.domain).distinct().all() # Changed from 'category' to 'domain'
+    domains = [d[0] for d in domains if d[0] is not None] # Extract strings and filter out None
+    domains.sort() # Sort domains alphabetically
+
+    return render_template('admin/view_courses.html', 
+                           title='Manage Courses', 
+                           courses=courses, 
+                           domains=domains, # Pass domains to template (changed from categories)
+                           selected_domain=selected_domain, # Pass selected domain for dropdown (changed from selected_category)
+                           current_year=current_year)
 
 
 @app.route('/admin/courses/new', methods=['GET', 'POST'])
@@ -532,20 +611,28 @@ def create_course():
     Handles the creation of a new course by an admin.
     """
     current_year = datetime.now().year
+    # Get all unique domains for the datalist, including predefined ones
+    existing_domains = db.session.query(Course.domain).distinct().all()
+    existing_domains = [d[0] for d in existing_domains if d[0] is not None]
+    
+    # Combine existing domains with predefined ones, remove duplicates, and sort
+    all_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_domains)))
 
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
-        course_link = request.form.get('course_link') # Get the new course link
+        course_link = request.form.get('course_link')
+        domain = request.form.get('domain') # Changed from 'category' to 'domain'
 
         if not name:
             flash('Course name is required.', 'danger')
-            return render_template('admin/create_course.html', title='Create New Course', current_year=current_year)
+            return render_template('admin/create_course.html', title='Create New Course', domains=all_domains, current_year=current_year)
 
         new_course = Course(
             name=name,
             description=description,
-            course_link=course_link, # Save the new course link
+            course_link=course_link,
+            domain=domain, # Save the new domain (changed from category)
             created_by_id=current_user.id
         )
         
@@ -559,7 +646,7 @@ def create_course():
             flash(f'An error occurred while creating the course: {e}', 'danger')
             app.logger.error(f"Course creation error: {e}")
 
-    return render_template('admin/create_course.html', title='Create New Course', current_year=current_year)
+    return render_template('admin/create_course.html', title='Create New Course', domains=all_domains, current_year=current_year)
 
 @app.route('/admin/courses/<int:course_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -569,16 +656,25 @@ def edit_course(course_id):
     Allows an admin to edit an existing course.
     """
     current_year = datetime.now().year
-    course = Course.query.get_or_404(course_id)
+    course = db.session.get(Course, course_id) # Fix: Use db.session.get()
+    if course is None:
+        abort(404)
+    # Get all unique domains for the datalist, including predefined ones
+    existing_domains = db.session.query(Course.domain).distinct().all()
+    existing_domains = [d[0] for d in existing_domains if d[0] is not None]
+    
+    # Combine existing domains with predefined ones, remove duplicates, and sort
+    all_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_domains)))
 
     if request.method == 'POST':
         course.name = request.form.get('name')
         course.description = request.form.get('description')
         course.course_link = request.form.get('course_link')
+        course.domain = request.form.get('domain') # Update domain (changed from category)
 
         if not course.name:
             flash('Course name is required.', 'danger')
-            return render_template('admin/edit_course.html', title='Edit Course', course=course, current_year=current_year)
+            return render_template('admin/edit_course.html', title='Edit Course', course=course, domains=all_domains, current_year=current_year)
         
         try:
             db.session.commit()
@@ -589,7 +685,7 @@ def edit_course(course_id):
             flash(f'An error occurred while updating the course: {e}', 'danger')
             app.logger.error(f"Course update error: {e}")
 
-    return render_template('admin/edit_course.html', title='Edit Course', course=course, current_year=current_year)
+    return render_template('admin/edit_course.html', title='Edit Course', course=course, domains=all_domains, current_year=current_year)
 
 
 @app.route('/admin/courses/<int:course_id>/modules')
@@ -600,8 +696,10 @@ def admin_view_course_modules(course_id):
     Allows admins to view modules for a specific course.
     """
     current_year = datetime.now().year
-    course = Course.query.get_or_404(course_id)
-    modules = Module.query.filter_by(course_id=course.id).all()
+    course = db.session.get(Course, course_id) # Fix: Use db.session.get()
+    if course is None:
+        abort(404)
+    modules = db.session.query(Module).filter_by(course_id=course.id).all()
     return render_template('admin/view_course_modules.html', title=f'Modules for {course.name}', course=course, modules=modules, current_year=current_year)
 
 @app.route('/admin/courses/<int:course_id>/modules/new', methods=['GET', 'POST'])
@@ -612,7 +710,9 @@ def create_module(course_id):
     Handles the creation of a new module for a specific course by an admin.
     """
     current_year = datetime.now().year
-    course = Course.query.get_or_404(course_id)
+    course = db.session.get(Course, course_id) # Fix: Use db.session.get()
+    if course is None:
+        abort(404)
 
     if request.method == 'POST':
         name = request.form.get('name')
@@ -651,7 +751,7 @@ def admin_view_assessments():
     Allows admins to view all assessments.
     """
     current_year = datetime.now().year
-    assessments = Assessment.query.all()
+    assessments = db.session.query(Assessment).all()
     return render_template('admin/view_assessments.html', title='Manage Assessments', assessments=assessments, current_year=current_year)
 
 
@@ -664,7 +764,7 @@ def create_assessment():
     Allows linking to an existing course.
     """
     current_year = datetime.now().year
-    courses = Course.query.all() # Get all existing courses to link an assessment
+    courses = db.session.query(Course).all() # Get all existing courses to link an assessment
 
     if request.method == 'POST':
         name = request.form.get('name')
@@ -709,8 +809,10 @@ def edit_assessment(assessment_id):
     Allows an admin to edit an existing assessment.
     """
     current_year = datetime.now().year
-    assessment = Assessment.query.get_or_404(assessment_id)
-    courses = Course.query.all() # For dropdown to change associated course
+    assessment = db.session.get(Assessment, assessment_id) # Fix: Use db.session.get()
+    if assessment is None:
+        abort(404)
+    courses = db.session.query(Course).all() # For dropdown to change associated course
 
     if request.method == 'POST':
         assessment.name = request.form.get('name')
@@ -744,7 +846,9 @@ def create_question(assessment_id):
     Handles the creation of a new question for a specific assessment by an admin.
     """
     current_year = datetime.now().year
-    assessment = Assessment.query.get_or_404(assessment_id)
+    assessment = db.session.get(Assessment, assessment_id) # Fix: Use db.session.get()
+    if assessment is None:
+        abort(404)
 
     if request.method == 'POST':
         text = request.form.get('text')
@@ -800,75 +904,73 @@ def create_question(assessment_id):
 
     return render_template('admin/create_question.html', title='Add Question', assessment=assessment, current_year=current_year)
 
-@app.route('/admin/assign_training', methods=['GET', 'POST'])
+@app.route('/admin/assign/options')
 @login_required
 @admin_required
-def assign_training():
+def assign_training_options():
     """
-    Allows admins to assign courses or assessments to trainees.
+    Provides options for admins to choose between assigning a course or an assessment.
+    """
+    current_year = datetime.now().year
+    return render_template('admin/assign_training_options.html', title='Assign Training Options', current_year=current_year)
+
+
+@app.route('/admin/assign/course', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def assign_course_training():
+    """
+    Allows admins to assign courses to trainees.
     Creates notifications for trainees upon assignment.
     """
     current_year = datetime.now().year
-    trainees = User.query.filter_by(role='trainee').all()
-    courses = Course.query.all()
-    assessments = Assessment.query.all()
+    trainees = db.session.query(User).filter_by(role='trainee').all()
+    courses = db.session.query(Course).all()
+
+    # Get all unique domains for the datalist for filtering trainees
+    existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
+    existing_trainee_domains = [d[0] for d in existing_trainee_domains if d[0] is not None]
+    all_trainee_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_trainee_domains)))
 
     if request.method == 'POST':
         trainee_ids = request.form.getlist('trainee_ids') # Get a list of selected trainee IDs
-        training_type = request.form.get('training_type') # 'course' or 'assessment'
-        training_id = request.form.get('training_id')
+        course_id = request.form.get('course_id')
         due_date_str = request.form.get('due_date')
 
-        if not trainee_ids or not training_type or not training_id:
-            flash('Please select at least one trainee and a training item.', 'danger')
-            return render_template('admin/assign_training.html', title='Assign Training', trainees=trainees, courses=courses, assessments=assessments, current_year=current_year)
+        if not trainee_ids or not course_id:
+            flash('Please select at least one trainee and a course.', 'danger')
+            return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
 
         try:
-            training_id = int(training_id)
+            course_id_int = int(course_id)
             due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
         except (ValueError, TypeError):
-            flash('Invalid training ID or due date format.', 'danger')
-            return render_template('admin/assign_training.html', title='Assign Training', trainees=trainees, courses=courses, assessments=assessments, current_year=current_year)
+            flash('Invalid course ID or due date format.', 'danger')
+            return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
 
         assigned_count = 0
+        course_name = db.session.get(Course, course_id_int).name # Fix: Use db.session.get()
+
         for trainee_id in trainee_ids:
             try:
                 trainee_id_int = int(trainee_id)
                 
                 # Check for existing assignment to prevent duplicates
-                existing_assignment = None
-                if training_type == 'course':
-                    existing_assignment = Assignment.query.filter_by(
-                        trainee_id=trainee_id_int,
-                        course_id=training_id
-                    ).first()
-                elif training_type == 'assessment':
-                    existing_assignment = Assignment.query.filter_by(
-                        trainee_id=trainee_id_int,
-                        assessment_id=training_id
-                    ).first()
+                existing_assignment = db.session.query(Assignment).filter_by(
+                    trainee_id=trainee_id_int,
+                    course_id=course_id_int
+                ).first()
 
                 if existing_assignment:
-                    flash(f'Training already assigned to trainee ID {trainee_id}. Skipping.', 'info')
+                    flash(f'Course "{course_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
                     continue # Skip to the next trainee
 
                 new_assignment = Assignment(
                     trainee_id=trainee_id_int,
+                    course_id=course_id_int,
                     assigned_by_id=current_user.id,
                     due_date=due_date
                 )
-
-                if training_type == 'course':
-                    new_assignment.course_id = training_id
-                    training_item_name = Course.query.get(training_id).name
-                    notification_message = f'You have been assigned a new course: "{training_item_name}".'
-                elif training_type == 'assessment':
-                    new_assignment.assessment_id = training_id
-                    training_item_name = Assessment.query.get(training_id).name
-                    notification_message = f'You have been assigned a new assessment: "{training_item_name}".'
-                else:
-                    flash('Invalid training type selected.', 'danger')
-                    continue # Skip this assignment
 
                 db.session.add(new_assignment)
                 db.session.flush() # Flush to get new_assignment.id for notification
@@ -877,7 +979,7 @@ def assign_training():
                 notification = Notification(
                     recipient_id=trainee_id_int,
                     sender_id=current_user.id,
-                    message=notification_message,
+                    message=f'You have been assigned a new course: "{course_name}".',
                     type='assignment_assigned',
                     related_id=new_assignment.id
                 )
@@ -890,13 +992,280 @@ def assign_training():
 
         if assigned_count > 0:
             db.session.commit()
-            flash(f'{assigned_count} training assignments created successfully!', 'success')
+            flash(f'{assigned_count} course assignments created successfully!', 'success')
             return redirect(url_for('dashboard')) # Or a page to view assignments
         else:
             db.session.rollback()
-            flash('No new assignments were created.', 'info')
+            flash('No new course assignments were created.', 'info')
 
-    return render_template('admin/assign_training.html', title='Assign Training', trainees=trainees, courses=courses, assessments=assessments, current_year=current_year)
+    return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
+
+
+@app.route('/admin/assign/assessment', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def assign_assessment_training():
+    """
+    Allows admins to assign assessments to trainees.
+    Creates notifications for trainees upon assignment.
+    """
+    current_year = datetime.now().year
+    trainees = db.session.query(User).filter_by(role='trainee').all()
+    assessments = db.session.query(Assessment).all()
+
+    # Get all unique domains for the datalist for filtering trainees
+    existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
+    existing_trainee_domains = [d[0] for d in existing_trainee_domains if d[0] is not None]
+    all_trainee_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_trainee_domains)))
+
+    if request.method == 'POST':
+        trainee_ids = request.form.getlist('trainee_ids') # Get a list of selected trainee IDs
+        assessment_id = request.form.get('assessment_id')
+        due_date_str = request.form.get('due_date')
+
+        if not trainee_ids or not assessment_id:
+            flash('Please select at least one trainee and an assessment.', 'danger')
+            return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
+
+        try:
+            assessment_id_int = int(assessment_id)
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
+        except (ValueError, TypeError):
+            flash('Invalid assessment ID or due date format.', 'danger')
+            return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
+
+        assigned_count = 0
+        assessment_name = db.session.get(Assessment, assessment_id_int).name # Fix: Use db.session.get()
+
+        for trainee_id in trainee_ids:
+            try:
+                trainee_id_int = int(trainee_id)
+                
+                # Check for existing assignment to prevent duplicates
+                existing_assignment = db.session.query(Assignment).filter_by(
+                    trainee_id=trainee_id_int,
+                    assessment_id=assessment_id_int
+                ).first()
+
+                if existing_assignment:
+                    flash(f'Assessment "{assessment_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
+                    continue # Skip to the next trainee
+
+                new_assignment = Assignment(
+                    trainee_id=trainee_id_int,
+                    assessment_id=assessment_id_int,
+                    assigned_by_id=current_user.id,
+                    due_date=due_date
+                )
+
+                db.session.add(new_assignment)
+                db.session.flush() # Flush to get new_assignment.id for notification
+
+                # Create notification for the trainee
+                notification = Notification(
+                    recipient_id=trainee_id_int,
+                    sender_id=current_user.id,
+                    message=f'You have been assigned a new assessment: "{assessment_name}".',
+                    type='assignment_assigned',
+                    related_id=new_assignment.id
+                )
+                db.session.add(notification)
+                assigned_count += 1
+
+            except ValueError:
+                flash(f'Invalid trainee ID: {trainee_id}. Skipping.', 'danger')
+                continue
+
+        if assigned_count > 0:
+            db.session.commit()
+            flash(f'{assigned_count} assessment assignments created successfully!', 'success')
+            return redirect(url_for('dashboard')) # Or a page to view assignments
+        else:
+            db.session.rollback()
+            flash('No new assessment assignments were created.', 'info')
+
+    return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
+
+
+@app.route('/admin/learning_paths')
+@login_required
+@admin_required
+def admin_view_learning_paths():
+    """
+    Allows admins to view all learning paths.
+    """
+    current_year = datetime.now().year
+    learning_paths = db.session.query(LearningPath).all()
+    return render_template('admin/view_learning_paths.html', title='Manage Learning Paths', learning_paths=learning_paths, current_year=current_year)
+
+@app.route('/admin/learning_paths/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_learning_path():
+    """
+    Handles the creation of a new learning path by an admin.
+    """
+    current_year = datetime.now().year
+    courses = db.session.query(Course).all() # Get all courses to allow selection for the path
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        selected_course_ids = request.form.getlist('courses') # Get list of selected course IDs
+
+        if not name:
+            flash('Learning Path name is required.', 'danger')
+            return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
+
+        new_path = LearningPath(
+            name=name,
+            description=description,
+            created_by_id=current_user.id
+        )
+
+        try:
+            # Add courses to the learning path
+            for course_id in selected_course_ids:
+                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
+                if course:
+                    new_path.courses.append(course)
+            
+            db.session.add(new_path)
+            db.session.commit()
+            flash(f'Learning Path "{name}" created successfully!', 'success')
+            return redirect(url_for('admin_view_learning_paths'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'An error occurred while creating the learning path: {e}', 'danger')
+            app.logger.error(f"Learning Path creation error: {e}")
+
+    return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
+
+@app.route('/admin/learning_paths/<int:path_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_learning_path(path_id):
+    """
+    Allows an admin to edit an existing learning path, including its associated courses.
+    """
+    current_year = datetime.now().year
+    learning_path = db.session.get(LearningPath, path_id) # Fix: Use db.session.get()
+    if learning_path is None:
+        abort(404)
+    all_courses = db.session.query(Course).all() # All courses available for selection
+
+    if request.method == 'POST':
+        learning_path.name = request.form.get('name')
+        learning_path.description = request.form.get('description')
+        selected_course_ids = request.form.getlist('courses')
+
+        if not learning_path.name:
+            flash('Learning Path name is required.', 'danger')
+            return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
+        
+        try:
+            # Clear existing courses and add new ones
+            learning_path.courses.clear()
+            for course_id in selected_course_ids:
+                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
+                if course:
+                    learning_path.courses.append(course)
+            
+            db.session.commit()
+            flash(f'Learning Path "{learning_path.name}" updated successfully!', 'success')
+            return redirect(url_for('admin_view_learning_paths'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'An error occurred while updating the learning path: {e}', 'danger')
+            app.logger.error(f"Learning Path update error: {e}")
+
+    return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
+
+
+@app.route('/admin/assign/learning_path', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def assign_learning_path_training():
+    """
+    Allows admins to assign learning paths to trainees.
+    Creates notifications for trainees upon assignment.
+    """
+    current_year = datetime.now().year
+    trainees = db.session.query(User).filter_by(role='trainee').all()
+    learning_paths = db.session.query(LearningPath).all()
+
+    # Get all unique domains for the datalist for filtering trainees
+    existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
+    existing_trainee_domains = [d[0] for d in existing_trainee_domains if d[0] is not None]
+    all_trainee_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_trainee_domains)))
+
+    if request.method == 'POST':
+        trainee_ids = request.form.getlist('trainee_ids')
+        learning_path_id = request.form.get('learning_path_id')
+        due_date_str = request.form.get('due_date')
+
+        if not trainee_ids or not learning_path_id:
+            flash('Please select at least one trainee and a learning path.', 'danger')
+            return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
+
+        try:
+            learning_path_id_int = int(learning_path_id)
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
+        except (ValueError, TypeError):
+            flash('Invalid learning path ID or due date format.', 'danger')
+            return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
+
+        assigned_count = 0
+        learning_path_name = db.session.get(LearningPath, learning_path_id_int).name # Fix: Use db.session.get()
+
+        for trainee_id in trainee_ids:
+            try:
+                trainee_id_int = int(trainee_id)
+                
+                # Check for existing assignment to prevent duplicates
+                existing_assignment = db.session.query(Assignment).filter_by(
+                    trainee_id=trainee_id_int,
+                    learning_path_id=learning_path_id_int
+                ).first()
+
+                if existing_assignment:
+                    flash(f'Learning Path "{learning_path_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
+                    continue
+
+                new_assignment = Assignment(
+                    trainee_id=trainee_id_int,
+                    learning_path_id=learning_path_id_int,
+                    assigned_by_id=current_user.id,
+                    due_date=due_date
+                )
+
+                db.session.add(new_assignment)
+                db.session.flush()
+
+                # Create notification for the trainee
+                notification = Notification(
+                    recipient_id=trainee_id_int,
+                    sender_id=current_user.id,
+                    message=f'You have been assigned a new learning path: "{learning_path_name}".',
+                    type='assignment_assigned',
+                    related_id=new_assignment.id
+                )
+                db.session.add(notification)
+                assigned_count += 1
+
+            except ValueError:
+                flash(f'Invalid trainee ID: {trainee_id}. Skipping.', 'danger')
+                continue
+
+        if assigned_count > 0:
+            db.session.commit()
+            flash(f'{assigned_count} learning path assignments created successfully!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            db.session.rollback()
+            flash('No new learning path assignments were created.', 'info')
+
+    return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
 
 
 # --- Trainee Routes ---
@@ -910,7 +1279,7 @@ def my_assignments():
     Adds logic to determine due date status for alerts.
     """
     current_year = datetime.now().year
-    assignments = Assignment.query.filter_by(trainee_id=current_user.id).order_by(Assignment.due_date.asc()).all()
+    assignments = db.session.query(Assignment).filter_by(trainee_id=current_user.id).order_by(Assignment.due_date.asc()).all()
 
     assignments_with_status = []
     today = date.today() # Get today's date for comparison
@@ -957,10 +1326,12 @@ def my_assignments():
 @trainee_required
 def view_assignment(assignment_id):
     """
-    Allows a trainee to view and start a specific assignment (course or assessment).
+    Allows a trainee to view and start a specific assignment (course or assessment or learning path).
     """
     current_year = datetime.now().year
-    assignment = Assignment.query.get_or_404(assignment_id)
+    assignment = db.session.get(Assignment, assignment_id) # Fix: Use db.session.get()
+    if assignment is None:
+        abort(404)
 
     # Ensure the assignment belongs to the current user
     if assignment.trainee_id != current_user.id:
@@ -968,13 +1339,15 @@ def view_assignment(assignment_id):
         return redirect(url_for('my_assignments'))
 
     if assignment.course_id:
-        course = Course.query.get_or_404(assignment.course_id)
-        modules = Module.query.filter_by(course_id=course.id).order_by(Module.id.asc()).all()
+        course = db.session.get(Course, assignment.course_id) # Fix: Use db.session.get()
+        if course is None:
+            abort(404)
+        modules = db.session.query(Module).filter_by(course_id=course.id).order_by(Module.id.asc()).all()
         
         # Get completion status for each module for this specific assignment
         module_completion_status = {}
         for module in modules:
-            completion = TraineeModuleCompletion.query.filter_by(
+            completion = db.session.query(TraineeModuleCompletion).filter_by(
                 assignment_id=assignment.id,
                 module_id=module.id
             ).first()
@@ -982,12 +1355,21 @@ def view_assignment(assignment_id):
 
         return render_template('trainee/view_course.html', title=course.name, course=course, assignment=assignment, modules=modules, module_completion_status=module_completion_status, current_year=current_year)
     elif assignment.assessment_id:
-        assessment = Assessment.query.get_or_404(assignment.assessment_id)
-        questions = Question.query.filter_by(assessment_id=assessment.id).all()
+        assessment = db.session.get(Assessment, assignment.assessment_id) # Fix: Use db.session.get()
+        if assessment is None:
+            abort(404)
+        questions = db.session.query(Question).filter_by(assessment_id=assessment.id).all()
         # For an assessment, display questions for the trainee to answer
         return render_template('trainee/take_assessment.html', title=assessment.name, assessment=assessment, questions=questions, assignment=assignment, current_year=current_year)
+    elif assignment.learning_path_id: # New logic for learning path
+        learning_path = db.session.get(LearningPath, assignment.learning_path_id) # Fix: Use db.session.get()
+        if learning_path is None:
+            abort(404)
+        # Fetch courses associated with this learning path
+        courses_in_path = learning_path.courses
+        return render_template('trainee/view_learning_path.html', title=learning_path.name, learning_path=learning_path, courses_in_path=courses_in_path, assignment=assignment, current_year=current_year)
     else:
-        flash('This assignment does not link to a valid course or assessment.', 'danger')
+        flash('This assignment does not link to a valid course, assessment, or learning path.', 'danger')
         return redirect(url_for('my_assignments'))
 
 @app.route('/trainee/assignments/<int:assignment_id>/submit', methods=['POST'])
@@ -998,7 +1380,9 @@ def submit_assignment(assignment_id):
     Handles the submission of answers for an assessment.
     Creates a notification for the assigner admin if open-ended questions are submitted.
     """
-    assignment = Assignment.query.get_or_404(assignment_id)
+    assignment = db.session.get(Assignment, assignment_id) # Fix: Use db.session.get()
+    if assignment is None:
+        abort(404)
 
     # Ensure the assignment belongs to the current user and is an assessment
     if assignment.trainee_id != current_user.id or not assignment.assessment_id:
@@ -1010,8 +1394,10 @@ def submit_assignment(assignment_id):
         flash('This assignment has already been submitted or is awaiting grading.', 'info')
         return redirect(url_for('my_assignments'))
 
-    assessment = Assessment.query.get_or_404(assignment.assessment_id)
-    questions = Question.query.filter_by(assessment_id=assessment.id).all()
+    assessment = db.session.get(Assessment, assignment.assessment_id) # Fix: Use db.session.get()
+    if assessment is None:
+        abort(404)
+    questions = db.session.query(Question).filter_by(assessment_id=assessment.id).all()
 
     total_score = 0
     total_possible_points = 0
@@ -1024,7 +1410,7 @@ def submit_assignment(assignment_id):
             user_answer = request.form.get(f'question_{question.id}')
             
             # Check if a submission already exists for this question/assignment
-            existing_submission = Submission.query.filter_by(
+            existing_submission = db.session.query(Submission).filter_by(
                 assignment_id=assignment.id,
                 question_id=question.id
             ).first()
@@ -1073,7 +1459,7 @@ def submit_assignment(assignment_id):
             assignment.score = (total_score / total_possible_points * 100) if total_possible_points > 0 else 0.0
 
             # Create notification for the admin who assigned it
-            assigner_admin = User.query.get(assignment.assigned_by_id)
+            assigner_admin = db.session.get(User, assignment.assigned_by_id) # Fix: Use db.session.get()
             if assigner_admin:
                 notification_message = f'Trainee "{current_user.username}" has submitted assessment "{assessment.name}" for grading.'
                 notification = Notification(
@@ -1089,7 +1475,7 @@ def submit_assignment(assignment_id):
             assignment.completion_date = datetime.utcnow()
             assignment.score = (total_score / total_possible_points * 100) if total_possible_points > 0 else 0.0
             # If no open-ended, it's fully completed, notify admin
-            assigner_admin = User.query.get(assignment.assigned_by_id)
+            assigner_admin = db.session.get(User, assignment.assigned_by_id) # Fix: Use db.session.get()
             if assigner_admin:
                 notification_message = f'Trainee "{current_user.username}" has completed assessment "{assessment.name}".'
                 notification = Notification(
@@ -1121,8 +1507,12 @@ def mark_module_completed(assignment_id, module_id):
     """
     Allows a trainee to mark a specific module within a course assignment as completed.
     """
-    assignment = Assignment.query.get_or_404(assignment_id)
-    module = Module.query.get_or_404(module_id)
+    assignment = db.session.get(Assignment, assignment_id) # Fix: Use db.session.get()
+    if assignment is None:
+        abort(404)
+    module = db.session.get(Module, module_id) # Fix: Use db.session.get()
+    if module is None:
+        abort(404)
 
     # Ensure assignment belongs to current user and module belongs to the course in assignment
     if assignment.trainee_id != current_user.id or assignment.course_id != module.course_id:
@@ -1130,7 +1520,7 @@ def mark_module_completed(assignment_id, module_id):
         return redirect(url_for('view_assignment', assignment_id=assignment.id))
 
     # Check if module is already completed for this assignment
-    existing_completion = TraineeModuleCompletion.query.filter_by(
+    existing_completion = db.session.query(TraineeModuleCompletion).filter_by(
         assignment_id=assignment.id,
         module_id=module.id
     ).first()
@@ -1166,15 +1556,19 @@ def complete_course(assignment_id):
     Creates a notification for the assigner admin upon course completion.
     """
     current_year = datetime.now().year
-    assignment = Assignment.query.get_or_404(assignment_id)
+    assignment = db.session.get(Assignment, assignment_id) # Fix: Use db.session.get()
+    if assignment is None:
+        abort(404)
 
     if assignment.trainee_id != current_user.id or not assignment.course_id:
         flash('Invalid course assignment or permission denied.', 'danger')
         return redirect(url_for('my_assignments'))
 
-    course = Course.query.get_or_404(assignment.course_id)
-    all_modules = Module.query.filter_by(course_id=course.id).all()
-    completed_modules_count = TraineeModuleCompletion.query.filter_by(assignment_id=assignment.id).count()
+    course = db.session.get(Course, assignment.course_id) # Fix: Use db.session.get()
+    if course is None:
+        abort(404)
+    all_modules = db.session.query(Module).filter_by(course_id=course.id).all()
+    completed_modules_count = db.session.query(TraineeModuleCompletion).filter_by(assignment_id=assignment.id).count()
 
     if len(all_modules) > 0 and completed_modules_count < len(all_modules):
         flash('You must complete all modules before marking the course as fully completed.', 'warning')
@@ -1199,7 +1593,7 @@ def complete_course(assignment_id):
             db.session.commit()
 
             # Create notification for the admin who assigned it
-            assigner_admin = User.query.get(assignment.assigned_by_id)
+            assigner_admin = db.session.get(User, assignment.assigned_by_id) # Fix: Use db.session.get()
             if assigner_admin:
                 notification_message = f'Trainee "{current_user.username}" has completed course "{course.name}".'
                 notification = Notification(
@@ -1234,7 +1628,7 @@ def grade_assessments():
     """
     current_year = datetime.now().year
     # Fetch assignments that are 'submitted_for_grading'
-    assignments_to_grade = Assignment.query.filter_by(status='submitted_for_grading').all()
+    assignments_to_grade = db.session.query(Assignment).filter_by(status='submitted_for_grading').all()
     return render_template('admin/grade_assessments.html', title='Grade Assessments', assignments=assignments_to_grade, current_year=current_year)
 
 @app.route('/admin/grade_submission/<int:assignment_id>', methods=['GET', 'POST'])
@@ -1246,14 +1640,18 @@ def grade_submission(assignment_id):
     Creates a notification for the trainee upon grading.
     """
     current_year = datetime.now().year
-    assignment = Assignment.query.get_or_404(assignment_id)
+    assignment = db.session.get(Assignment, assignment_id) # Fix: Use db.session.get()
+    if assignment is None:
+        abort(404)
 
     # Ensure it's an assessment and submitted for grading
     if not assignment.assessment_id or assignment.status not in ['submitted_for_grading', 'graded']:
         flash('This assignment is not awaiting grading or has already been graded.', 'info')
         return redirect(url_for('grade_assessments'))
 
-    assessment = Assessment.query.get_or_404(assignment.assessment_id)
+    assessment = db.session.get(Assessment, assignment.assessment_id) # Fix: Use db.session.get()
+    if assessment is None:
+        abort(404)
     
     # Fetch all submissions for this assignment, and eager load questions
     # Use a join to get question details along with submissions
@@ -1301,7 +1699,7 @@ def grade_submission(assignment_id):
                 db.session.commit()
                 
                 # Create notification for the trainee
-                trainee = User.query.get(assignment.trainee_id)
+                trainee = db.session.get(User, assignment.trainee_id) # Fix: Use db.session.get()
                 if trainee:
                     notification_message = f'Your assessment "{assessment.name}" has been graded. Your score: {assignment.score:.2f}%.'
                     notification = Notification(
@@ -1334,41 +1732,72 @@ def grade_submission(assignment_id):
 @roles_required('admin', 'support') # Allow both admin and support to view all users
 def admin_view_users():
     """
-    Allows admins and support users to view all users in the system.
+    Allows admins and support users to view all users in the system, with optional filtering by domain.
     """
     current_year = datetime.now().year
-    users = User.query.all()
-    return render_template('admin/manage_users.html', title='Manage Users', users=users, current_year=current_year)
+    selected_domain = request.args.get('domain')
+    
+    # Get all unique domains from users (trainees and admins) for the filter dropdown
+    existing_user_domains = db.session.query(User.domain).filter(User.role.in_(['trainee', 'admin'])).distinct().all()
+    existing_user_domains = [d[0] for d in existing_user_domains if d[0] is not None]
+    all_user_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_user_domains)))
+
+    if selected_domain and selected_domain != 'all':
+        users = db.session.query(User).filter_by(domain=selected_domain).all()
+    else:
+        users = db.session.query(User).all()
+
+    return render_template('admin/manage_users.html', 
+                           title='Manage Users', 
+                           users=users, 
+                           domains=all_user_domains, # Pass all unique user domains
+                           selected_domain=selected_domain, # Pass selected domain for dropdown
+                           current_year=current_year)
 
 @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_user(user_id):
     """
-    Allows an admin to edit an existing user's details (username, role, password).
+    Allows an admin to edit an existing user's details (username, role, password, domain).
     """
     current_year = datetime.now().year
-    user_to_edit = User.query.get_or_404(user_id)
+    user_to_edit = db.session.get(User, user_id) # Fix: Use db.session.get()
+    if user_to_edit is None:
+        abort(404)
+
+    # Get all unique domains for the datalist, including predefined ones
+    existing_domains = db.session.query(Course.domain).distinct().all()
+    existing_domains = [d[0] for d in existing_domains if d[0] is not None]
+    all_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_domains)))
+
 
     if request.method == 'POST':
         new_username = request.form.get('username')
         new_role = request.form.get('role')
         new_password = request.form.get('password')
+        new_domain = request.form.get('domain') # Get updated domain
 
         # Basic validation
         if not new_username or not new_role:
             flash('Username and role are required.', 'danger')
-            return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year)
+            return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year, domains=all_domains)
 
         # Check if username already exists for another user
-        existing_user_with_username = User.query.filter(User.username == new_username, User.id != user_to_edit.id).first()
+        existing_user_with_username = db.session.query(User).filter(User.username == new_username, User.id != user_to_edit.id).first()
         if existing_user_with_username:
             flash('Username already exists for another user. Please choose a different one.', 'danger')
-            return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year)
+            return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year, domains=all_domains)
 
         # Update user details
         user_to_edit.username = new_username
         user_to_edit.role = new_role
+        
+        # Only update domain if the user is a trainee or admin
+        if user_to_edit.role in ['trainee', 'admin']:
+            user_to_edit.domain = new_domain
+        else:
+            user_to_edit.domain = None # Clear domain if not a trainee or admin
 
         if new_password: # Only update password if a new one is provided
             user_to_edit.set_password(new_password)
@@ -1382,7 +1811,7 @@ def edit_user(user_id):
             flash(f'An error occurred while updating the user: {e}', 'danger')
             app.logger.error(f"User update error: {e}")
 
-    return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year)
+    return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year, domains=all_domains)
 
 
 @app.route('/admin/users/<int:trainee_id>/progress')
@@ -1393,7 +1822,9 @@ def admin_view_trainee_progress(trainee_id):
     Allows an admin or support user to view the detailed progress of a specific trainee.
     """
     current_year = datetime.now().year
-    trainee = User.query.get_or_404(trainee_id)
+    trainee = db.session.get(User, trainee_id) # Fix: Use db.session.get()
+    if trainee is None:
+        abort(404)
 
     # This check ensures that only actual 'trainee' roles are processed for progress viewing.
     # If a non-trainee user's ID is passed, it will redirect back to manage users.
@@ -1401,26 +1832,29 @@ def admin_view_trainee_progress(trainee_id):
         flash('User is not a trainee. Progress can only be viewed for trainee accounts.', 'danger')
         return redirect(url_for('admin_view_users')) 
 
-    assignments = Assignment.query.filter_by(trainee_id=trainee.id).order_by(Assignment.assigned_at.desc()).all()
+    assignments = db.session.query(Assignment).filter_by(trainee_id=trainee.id).order_by(Assignment.assigned_at.desc()).all()
 
     # Prepare data for rendering
     trainee_progress_data = []
     for assignment in assignments:
         item_data = {
             'assignment': assignment,
-            'type': 'course' if assignment.course_id else 'assessment',
+            'type': 'course' if assignment.course_id else ('assessment' if assignment.assessment_id else 'learning_path'), # Added learning_path type
             'details': None,
             'modules': [], # For courses
-            'submissions': [] # For assessments
+            'submissions': [], # For assessments
+            'courses_in_path': [] # For learning paths
         }
 
         if assignment.course_id:
-            course = Course.query.get_or_404(assignment.course_id)
+            course = db.session.get(Course, assignment.course_id) # Fix: Use db.session.get()
+            if course is None:
+                abort(404)
             item_data['details'] = course
             
-            modules = Module.query.filter_by(course_id=course.id).order_by(Module.id.asc()).all()
+            modules = db.session.query(Module).filter_by(course_id=course.id).order_by(Module.id.asc()).all()
             for module in modules:
-                completion = TraineeModuleCompletion.query.filter_by(
+                completion = db.session.query(TraineeModuleCompletion).filter_by(
                     assignment_id=assignment.id,
                     module_id=module.id
                 ).first()
@@ -1430,7 +1864,9 @@ def admin_view_trainee_progress(trainee_id):
                     'completed_at': completion.completed_at if completion else None
                 })
         elif assignment.assessment_id:
-            assessment = Assessment.query.get_or_404(assignment.assessment_id)
+            assessment = db.session.get(Assessment, assignment.assessment_id) # Fix: Use db.session.get()
+            if assessment is None:
+                abort(404)
             item_data['details'] = assessment
             
             # Fetch submissions along with their questions
@@ -1443,6 +1879,17 @@ def admin_view_trainee_progress(trainee_id):
                     'submission': submission,
                     'question': question
                 })
+        elif assignment.learning_path_id: # New logic for learning path progress
+            learning_path = db.session.get(LearningPath, assignment.learning_path_id) # Fix: Use db.session.get()
+            if learning_path is None:
+                abort(404)
+            item_data['details'] = learning_path
+            item_data['courses_in_path'] = learning_path.courses # Get all courses in the path
+            # You might want to add logic here to track progress *within* the learning path,
+            # e.g., which courses in the path the trainee has completed.
+            # This would require more complex tracking (e.g., another association table or status on AssignmentCourse).
+            # For now, it.courses just lists the courses in the path.
+
         trainee_progress_data.append(item_data)
 
     # Render the correct template based on the current user's role
@@ -1472,7 +1919,9 @@ def reset_user_password(user_id):
     Allows an admin to reset the password for any user.
     """
     current_year = datetime.now().year
-    user_to_reset = User.query.get_or_404(user_id)
+    user_to_reset = db.session.get(User, user_id) # Fix: Use db.session.get()
+    if user_to_reset is None:
+        abort(404)
 
     # Prevent resetting own password via this route (use edit_user for that)
     if user_to_reset.id == current_user.id:
@@ -1517,7 +1966,8 @@ def search():
     search_results = {
         'users': [],
         'courses': [],
-        'assessments': []
+        'assessments': [],
+        'learning_paths': [] # Added for learning paths
     }
 
     if query:
@@ -1525,22 +1975,29 @@ def search():
 
         # Search Users (only if admin or support)
         if current_user.role in ['admin', 'support']:
-            users = User.query.filter(User.username.ilike(search_pattern)).all()
+            users = db.session.query(User).filter(User.username.ilike(search_pattern)).all()
             search_results['users'] = users
 
         # Search Courses
-        courses = Course.query.filter(
+        courses = db.session.query(Course).filter(
             (Course.name.ilike(search_pattern)) | 
             (Course.description.ilike(search_pattern))
         ).all()
         search_results['courses'] = courses
 
         # Search Assessments
-        assessments = Assessment.query.filter(
+        assessments = db.session.query(Assessment).filter(
             (Assessment.name.ilike(search_pattern)) | 
             (Assessment.description.ilike(search_pattern))
         ).all()
         search_results['assessments'] = assessments
+
+        # Search Learning Paths
+        learning_paths = db.session.query(LearningPath).filter(
+            (LearningPath.name.ilike(search_pattern)) |
+            (LearningPath.description.ilike(search_pattern))
+        ).all()
+        search_results['learning_paths'] = learning_paths
 
     return render_template('search_results.html', 
                            title='Search Results', 
@@ -1555,7 +2012,7 @@ def view_notifications():
     Displays all notifications for the current user.
     """
     current_year = datetime.now().year
-    notifications = Notification.query.filter_by(recipient_id=current_user.id).order_by(Notification.created_at.desc()).all()
+    notifications = db.session.query(Notification).filter_by(recipient_id=current_user.id).order_by(Notification.created_at.desc()).all()
     return render_template('notifications.html', title='My Notifications', notifications=notifications, current_year=current_year)
 
 @app.route('/notifications/mark_read/<int:notification_id>')
@@ -1564,7 +2021,9 @@ def mark_notification_read(notification_id):
     """
     Marks a specific notification as read.
     """
-    notification = Notification.query.get_or_404(notification_id)
+    notification = db.session.get(Notification, notification_id) # Fix: Use db.session.get()
+    if notification is None:
+        abort(404)
     if notification.recipient_id != current_user.id:
         flash('You do not have permission to mark this notification as read.', 'danger')
         return redirect(url_for('view_notifications'))
@@ -1586,14 +2045,59 @@ def mark_notification_read(notification_id):
 def create_db():
     """Creates the database tables."""
     with app.app_context():
-        # Check if tables already exist before creating them
-        # This prevents dropping data on every restart
-        inspector = db.inspect(db.engine)
-        if not inspector.has_table("user"): # Check for at least one table
+        inspector = inspect(db.engine) # Correct way to get an inspector instance
+
+        # Check if the 'course' table exists
+        if not inspector.has_table("course"):
             db.create_all()
             print("Database tables created.")
         else:
-            print("Database tables already exist. Skipping creation.")
+            print("Database tables already exist. Checking for new columns/tables...")
+            # Check if the 'category' column exists in the 'course' table and rename/add 'domain'
+            existing_course_columns = [column['name'] for column in inspector.get_columns("course")]
+            
+            if "category" in existing_course_columns and "domain" not in existing_course_columns:
+                # If 'category' exists but 'domain' doesn't, rename 'category' to 'domain'
+                with db.engine.connect() as connection:
+                    connection.execute(db.text("ALTER TABLE course RENAME COLUMN category TO domain"))
+                print("Renamed 'category' column to 'domain' in 'course' table.")
+                db.session.commit() # Commit the ALTER TABLE statement
+            elif "category" not in existing_course_columns and "domain" not in existing_course_columns:
+                # If neither exists, add 'domain'
+                with db.engine.connect() as connection:
+                    connection.execute(db.text("ALTER TABLE course ADD COLUMN domain VARCHAR(50)"))
+                print("Added 'domain' column to 'course' table.")
+                db.session.commit() # Commit the ALTER TABLE statement
+            else:
+                print("'domain' column already exists in 'course' table.")
+                if "category" in existing_course_columns and "domain" in existing_course_columns:
+                    print("Both 'category' and 'domain' columns exist. This might indicate a previous manual migration or error. No automatic action taken for 'category'.")
+
+            # Check if 'learning_path_id' column exists in 'assignment' table
+            existing_assignment_columns = [column['name'] for column in inspector.get_columns("assignment")]
+            if "learning_path_id" not in existing_assignment_columns:
+                with db.engine.connect() as connection:
+                    connection.execute(db.text("ALTER TABLE assignment ADD COLUMN learning_path_id INTEGER"))
+                    connection.execute(db.text("CREATE INDEX ix_assignment_learning_path_id ON assignment (learning_path_id)"))
+                    connection.execute(db.text("CREATE UNIQUE INDEX ix_learning_path_courses_learning_path_id_course_id ON learning_path_courses (learning_path_id, course_id)"))
+                print("Added 'learning_path_id' column to 'assignment' table and created index.")
+                db.session.commit()
+            else:
+                print("'learning_path_id' column already exists in 'assignment' table.")
+            
+            # Check if 'domain' column exists in 'user' table
+            existing_user_columns = [column['name'] for column in inspector.get_columns("user")]
+            if "domain" not in existing_user_columns:
+                with db.engine.connect() as connection:
+                    connection.execute(db.text("ALTER TABLE user ADD COLUMN domain VARCHAR(50)"))
+                print("Added 'domain' column to 'user' table.")
+                db.session.commit()
+            else:
+                print("'domain' column already exists in 'user' table.")
+
+
+        # Ensure all tables are created if they don't exist (e.g., if db file was just deleted or new tables added)
+        db.create_all()
 
 
 def seed_db():
@@ -1603,9 +2107,9 @@ def seed_db():
     """
     with app.app_context():
         # Only seed trainee if no users exist, or if specifically no trainee exists
-        if not User.query.filter_by(role='trainee').first():
+        if not db.session.query(User).filter_by(role='trainee').first():
             print("Seeding database with initial trainee user...")
-            trainee_user = User(username='trainee', role='trainee')
+            trainee_user = User(username='trainee', role='trainee', domain='Data Collection') # Assign a default domain
             trainee_user.set_password('traineepass')
             db.session.add(trainee_user)
             db.session.commit()
@@ -1614,9 +2118,9 @@ def seed_db():
             print("Trainee user already exists. Skipping trainee seeding.")
         
         # Check if an admin user exists, if not, prompt to register
-        if not User.query.filter_by(role='admin').first():
+        if not db.session.query(User).filter_by(role='admin').first():
             print("No admin user found. Please register an admin via the UI with passcode 'admincode'.")
-        if not User.query.filter_by(role='support').first():
+        if not db.session.query(User).filter_by(role='support').first():
             print("No support user found. Please register a support user via the UI with passcode 'supportcode'.")
 
 # --- Main execution block ---

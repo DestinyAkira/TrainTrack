@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Path: {{ learning_path.name }}{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Learning Path: "{{ learning_path.name }}"</h1>
+    <p class="text-lg text-gray-600 mb-8 text-center">{{ learning_path.description if learning_path.description else 'No description provided.' }}</p>
+
+    <div class="bg-indigo-50 p-6 rounded-lg shadow-md mt-6 mb-8">
+        <h2 class="text-xl font-semibold text-indigo-700 mb-4">Courses in this Learning Path:</h2>
+        {% if courses_in_path %}
+            <ul class="space-y-4">
+                {% for course in courses_in_path %}
+                    <li class="bg-white p-4 rounded-md shadow-sm flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">{{ loop.index }}. {{ course.name }}</h3>
+                            <p class="text-gray-600 text-sm">{{ course.description if course.description else 'No description.' }}</p>
+                            {% if course.course_link %}
+                                <a href="{{ course.course_link }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-sm mt-1 inline-block">View Course Content</a>
+                            {% endif %}
+                        </div>
+                        {# You might want to add logic here to show if this specific course within the path is completed by the trainee #}
+                        {# This would require additional tracking in the database, e.g., a "TraineeCourseCompletion" model #}
+                        {# For now, we just list the courses. #}
+                        <span class="px-3 py-1 rounded-full bg-gray-200 text-gray-800 text-sm font-medium">Included</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-center text-gray-600 text-lg">No courses have been added to this learning path yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-green-50 p-6 rounded-lg shadow-md mt-6">
+        <h2 class="text-xl font-semibold text-green-700 mb-4">Learning Path Assignment Status:</h2>
+        <p class="text-lg text-gray-700 mb-4">Current Status: <span class="font-medium text-green-800">{{ assignment.status.replace('_', ' ').title() }}</span></p>
+        
+        {# TODO: Implement logic for marking Learning Path as completed. This would likely involve checking completion of all included courses/modules. #}
+        {# For now, display a placeholder. #}
+        {% if assignment.status == 'completed' %}
+            <p class="text-green-600 font-semibold">This learning path has been marked as completed on {{ assignment.completion_date.strftime('%Y-%m-%d') }}.</p>
+        {% else %}
+            <p class="text-gray-600">Complete all courses within this learning path to mark it as completed.</p>
+            {# You might add a button here to "Mark Learning Path as Completed" if all sub-courses are done #}
+        {% endif %}
+    </div>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('my_assignments') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to My Assignments
+        </a>
+    </div>
+{% endblock %}

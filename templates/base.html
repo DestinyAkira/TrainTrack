@@ -3,104 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrainTrack - {% block title %}{% endblock %}</title>
+    <title>TrainTrack - {{ title | default('Learning Management') }}</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f4f7f6; /* Light gray background */
+            font-family: "Inter", sans-serif;
+            background-color: #f4f7f6; /* Light background for the whole page */
         }
         .flash-message {
             padding: 1rem;
             margin-bottom: 1rem;
-            border-radius: 0.5rem;
-            font-weight: 500;
+            border-radius: 0.375rem; /* Tailwind's rounded-md */
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            font-weight: 500;
         }
-        .flash-message.success {
+        .flash-success {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        .flash-message.danger {
+        .flash-danger {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .flash-message.info {
+        .flash-info {
             background-color: #d1ecf1;
             color: #0c5460;
             border: 1px solid #bee5eb;
         }
-        .flash-message button {
-            background: none;
-            border: none;
-            font-size: 1.2rem;
-            cursor: pointer;
-            color: inherit;
+        .flash-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
         }
     </style>
 </head>
 <body class="flex flex-col min-h-screen">
-    <nav class="bg-gray-800 p-4 shadow-md">
-        <div class="container mx-auto flex flex-wrap items-center justify-between">
-            {# Back Button #}
-            <button onclick="history.back()" class="text-white text-lg font-bold rounded-md px-3 py-1 hover:bg-gray-700 transition duration-300 mr-4" aria-label="Go back">
-                &larr; Back
-            </button>
-            
-            <a href="{{ url_for('index') }}" class="text-white text-2xl font-bold rounded-md px-3 py-1 hover:bg-gray-700 transition duration-300">TrainTrack</a>
-            
-            {# Search Bar in Navbar #}
-            <div class="flex-grow mx-4 max-w-xl">
-                <form action="{{ url_for('search') }}" method="GET" class="flex items-center">
-                    <input type="search" name="query" placeholder="Search..."
-                           class="flex-grow py-1.5 px-3 rounded-l-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
-                           aria-label="Search input" value="{{ request.args.get('query', '') }}">
-                    <button type="submit"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-4 rounded-r-md focus:outline-none focus:shadow-outline transition duration-300">
-                        Search
-                    </button>
-                </form>
-            </div>
-
-            <div class="flex items-center space-x-4 mt-2 md:mt-0">
-                {% if current_user.is_authenticated %}
-                    {# Notifications Link #}
-                    <a href="{{ url_for('view_notifications') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300 relative">
-                        Notifications
-                        {% if unread_notifications_count > 0 %}
-                            <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                                {{ unread_notifications_count }}
-                            </span>
+    <header class="bg-gray-800 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="{{ url_for('dashboard') }}" class="text-2xl font-bold text-indigo-300 hover:text-indigo-100 transition duration-300">TrainTrack</a>
+            <nav>
+                <ul class="flex space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <li><a href="{{ url_for('dashboard') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Dashboard</a></li>
+                        
+                        {# Admin Links #}
+                        {% if current_user.role == 'admin' %}
+                            <li class="relative group">
+                                <button class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300 focus:outline-none">
+                                    Admin <i class="fas fa-caret-down ml-1"></i>
+                                </button>
+                                <ul class="absolute hidden group-hover:block bg-gray-700 text-white rounded-md shadow-lg py-2 z-10 min-w-[160px]">
+                                    <li><a href="{{ url_for('admin_view_users') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Users</a></li>
+                                    <li><a href="{{ url_for('admin_view_courses') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Courses</a></li>
+                                    <li><a href="{{ url_for('admin_view_assessments') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Assessments</a></li>
+                                    <li><a href="{{ url_for('admin_view_learning_paths') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Learning Paths</a></li>
+                                    <li><a href="{{ url_for('assign_training_options') }}" class="block px-4 py-2 hover:bg-gray-600">Assign Training</a></li>
+                                    <li><a href="{{ url_for('grade_assessments') }}" class="block px-4 py-2 hover:bg-gray-600">Grade Assessments</a></li>
+                                </ul>
+                            </li>
                         {% endif %}
-                    </a>
-                    <span class="text-gray-300">|</span>
-                    <a href="{{ url_for('dashboard') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300">Dashboard</a>
-                    <span class="text-gray-300">|</span>
-                    <a href="{{ url_for('logout') }}" class="bg-red-600 text-white px-4 py-1.5 rounded-md hover:bg-red-700 transition duration-300">Logout</a>
-                {% else %}
-                    <a href="{{ url_for('login') }}" class="text-white hover:text-gray-300 px-3 py-1 rounded-md hover:bg-gray-700 transition duration-300">Login</a>
-                    <a href="{{ url_for('register') }}" class="bg-indigo-600 text-white px-4 py-1.5 rounded-md hover:bg-indigo-700 transition duration-300">Register</a>
-                {% endif %}
-            </div>
+
+                        {# Support Links #}
+                        {% if current_user.role == 'support' %}
+                            <li class="relative group">
+                                <button class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300 focus:outline-none">
+                                    Support <i class="fas fa-caret-down ml-1"></i>
+                                </button>
+                                <ul class="absolute hidden group-hover:block bg-gray-700 text-white rounded-md shadow-lg py-2 z-10 min-w-[160px]">
+                                    <li><a href="{{ url_for('admin_view_users') }}" class="block px-4 py-2 hover:bg-gray-600">View Users</a></li>
+                                    <li><a href="{{ url_for('grade_assessments') }}" class="block px-4 py-2 hover:bg-gray-600">Grade Assessments</a></li>
+                                </ul>
+                            </li>
+                        {% endif %}
+
+                        {# Trainee Links #}
+                        {% if current_user.role == 'trainee' %}
+                            <li><a href="{{ url_for('my_assignments') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">My Assignments</a></li>
+                        {% endif %}
+
+                        {# Notifications #}
+                        <li class="relative">
+                            <a href="{{ url_for('view_notifications') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">
+                                Notifications
+                                {% if unread_notifications_count > 0 %}
+                                    <span class="ml-1 px-2 py-1 text-xs font-bold bg-red-500 rounded-full">{{ unread_notifications_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+
+                        {# Search Bar #}
+                        <li>
+                            <form action="{{ url_for('search') }}" method="GET" class="flex items-center">
+                                <input type="search" name="query" placeholder="Search..."
+                                       class="px-3 py-1 rounded-md bg-gray-700 text-white border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                       aria-label="Search input">
+                                <button type="submit" class="ml-2 text-gray-300 hover:text-white transition duration-300" aria-label="Submit search">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </form>
+                        </li>
+
+                        {# User Dropdown #}
+                        <li class="relative group">
+                            <button class="flex items-center hover:text-gray-300 px-3 py-2 rounded-md transition duration-300 focus:outline-none">
+                                <i class="fas fa-user-circle text-xl mr-2"></i>
+                                {{ current_user.username }} <i class="fas fa-caret-down ml-1"></i>
+                            </button>
+                            <ul class="absolute hidden group-hover:block bg-gray-700 text-white rounded-md shadow-lg py-2 right-0 z-10 min-w-[160px]">
+                                <li><a href="{{ url_for('logout') }}" class="block px-4 py-2 hover:bg-gray-600">Logout</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li><a href="{{ url_for('login') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Login</a></li>
+                        <li><a href="{{ url_for('register') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Register</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
         </div>
-    </nav>
+    </header>
 
     <main class="container mx-auto mt-8 p-4 flex-grow">
         {# Flash Messages #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="mb-6">
+                <div class="mb-8">
                     {% for category, message in messages %}
-                        <div class="flash-message {{ category }}" role="alert">
-                            <span>{{ message }}</span>
-                            <button type="button" onclick="this.parentElement.style.display='none';" aria-label="Close alert">
-                                &times;
-                            </button>
+                        <div class="flash-message flash-{{ category }}">
+                            {{ message }}
                         </div>
                     {% endfor %}
                 </div>
@@ -110,7 +143,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-gray-800 text-white text-center p-4 mt-8 shadow-inner">
+    <footer class="bg-gray-800 text-white p-4 text-center shadow-inner mt-8">
         <div class="container mx-auto">
             <p>&copy; {{ current_year }} TrainTrack. All rights reserved.</p>
         </div>

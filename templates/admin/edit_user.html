@@ -21,6 +21,23 @@
                 <option value="admin" {% if user_item.role == 'admin' %}selected{% endif %}>Admin</option>
             </select>
         </div>
+        
+        {# Trainee Domain Field - Only visible for Trainee role #}
+        <div class="mb-5" id="trainee-domain-field" style="display: none;">
+            <label for="domain" class="block text-gray-700 text-sm font-medium mb-2">Trainee Domain (Type or Select):</label>
+            <input type="text" id="domain" name="domain" list="domain-options"
+                   value="{{ user_item.domain if user_item.domain else '' }}"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   placeholder="e.g., Data Collection"
+                   aria-label="Trainee domain input">
+            <datalist id="domain-options">
+                {% for dom in domains %}
+                    <option value="{{ dom }}">
+                {% endfor %}
+            </datalist>
+            <p class="text-xs text-gray-500 mt-1">Select an existing domain or type a new one for the trainee.</p>
+        </div>
+
         <div class="mb-6">
             <label for="password" class="block text-gray-700 text-sm font-medium mb-2">New Password (Leave blank to keep current):</label>
             <input type="password" id="password" name="password"
@@ -41,4 +58,28 @@
             Back to Manage Users
         </a>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const roleSelect = document.getElementById('role');
+            const traineeDomainField = document.getElementById('trainee-domain-field');
+            const traineeDomainInput = document.getElementById('domain'); // Note: 'domain' is the name attribute
+
+            function toggleDomainField() {
+                if (roleSelect.value === 'trainee') {
+                    traineeDomainField.style.display = 'block';
+                    // No 'required' attribute added here, as domain can be optional for existing trainees
+                } else {
+                    traineeDomainField.style.display = 'none';
+                    traineeDomainInput.value = ''; // Clear value if not a trainee
+                }
+            }
+
+            // Initial call to set visibility based on current user_item's role
+            toggleDomainField();
+
+            // Listen for changes to the role selection
+            roleSelect.addEventListener('change', toggleDomainField);
+        });
+    </script>
 {% endblock %}

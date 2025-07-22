@@ -27,6 +27,22 @@
                 <option value="admin">Admin</option>
             </select>
         </div>
+        
+        {# Domain Field - Visible for Trainee and Admin roles #}
+        <div class="mb-5" id="user-domain-field" style="display: none;">
+            <label for="user_domain" class="block text-gray-700 text-sm font-medium mb-2">Domain (Type or Select):</label>
+            <input type="text" id="user_domain" name="user_domain" list="domain-options"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   placeholder="e.g., Data Collection"
+                   aria-label="User domain input">
+            <datalist id="domain-options">
+                {% for dom in domains %}
+                    <option value="{{ dom }}">
+                {% endfor %}
+            </datalist>
+            <p class="text-xs text-gray-500 mt-1">Select an existing domain or type a new one for the user.</p>
+        </div>
+
         <div class="mb-6" id="passcode-field">
             <label for="passcode" class="block text-gray-700 text-sm font-medium mb-2">Passcode (for Support/Admin):</label>
             <input type="password" id="passcode" name="passcode"
@@ -42,28 +58,41 @@
     </form>
 
     <script>
-        // JavaScript to conditionally show/hide passcode field based on role selection
+        // JavaScript to conditionally show/hide passcode and user domain fields based on role selection
         document.addEventListener('DOMContentLoaded', function() {
             const roleSelect = document.getElementById('role');
             const passcodeField = document.getElementById('passcode-field');
             const passcodeInput = document.getElementById('passcode');
+            const userDomainField = document.getElementById('user-domain-field');
+            const userDomainInput = document.getElementById('user_domain');
 
-            function togglePasscodeField() {
+            function toggleFields() {
+                // Reset visibility and required attributes
+                passcodeField.style.display = 'none';
+                passcodeInput.removeAttribute('required');
+                passcodeInput.value = ''; 
+
+                userDomainField.style.display = 'none';
+                userDomainInput.removeAttribute('required');
+                userDomainInput.value = '';
+
                 if (roleSelect.value === 'admin' || roleSelect.value === 'support') {
                     passcodeField.style.display = 'block';
                     passcodeInput.setAttribute('required', 'required');
-                } else {
-                    passcodeField.style.display = 'none';
-                    passcodeInput.removeAttribute('required');
-                    passcodeInput.value = ''; // Clear passcode if not needed
+                }
+                
+                // Show domain field for both admin and trainee roles
+                if (roleSelect.value === 'admin' || roleSelect.value === 'trainee') {
+                    userDomainField.style.display = 'block';
+                    userDomainInput.setAttribute('required', 'required'); // Domain is required for admins and trainees
                 }
             }
 
             // Initial check on page load
-            togglePasscodeField();
+            toggleFields();
 
             // Listen for changes to the role selection
-            roleSelect.addEventListener('change', togglePasscodeField);
+            roleSelect.addEventListener('change', toggleFields);
         });
     </script>
 {% endblock %}

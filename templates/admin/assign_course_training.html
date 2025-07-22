@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Assign Course{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Assign Course to Trainees</h1>
+    <form method="POST" action="{{ url_for('assign_course_training') }}" class="max-w-xl mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
+        <div class="mb-5">
+            <label class="block text-gray-700 text-sm font-medium mb-2">Select Trainees (Multi-select):</label>
+            {% if trainees %}
+                <div class="mb-4">
+                    <label for="trainee-domain-filter" class="block text-gray-700 text-sm font-medium mb-2">Filter Trainees by Domain:</label>
+                    <select id="trainee-domain-filter" onchange="filterTraineeList()"
+                            class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
+                        <option value="all">All Domains</option>
+                        {% for dom in trainee_domains %}
+                            <option value="{{ dom }}">{{ dom }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto bg-white">
+                    {% for trainee in trainees %}
+                        <div class="flex items-center mb-2 trainee-item" data-domain="{{ trainee.domain | lower }}">
+                            <input type="checkbox" id="trainee_{{ trainee.id }}" name="trainee_ids" value="{{ trainee.id }}"
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                   aria-label="Select trainee {{ trainee.username }}">
+                            <label for="trainee_{{ trainee.id }}" class="ml-2 text-gray-700">{{ trainee.username }} {% if trainee.domain %}<span class="text-xs text-gray-500">({{ trainee.domain }})</span>{% endif %}</label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Select one or more trainees.</p>
+            {% else %}
+                <p class="text-gray-600">No trainee accounts found. Please create some first.</p>
+            {% endif %}
+        </div>
+
+        <div class="mb-5">
+            <label for="course_id" class="block text-gray-700 text-sm font-medium mb-2">Select Course:</label>
+            <select id="course_id" name="course_id" required
+                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                    aria-label="Select course">
+                <option value="">-- Select Course --</option>
+                {% for course in courses %}
+                    <option value="{{ course.id }}">{{ course.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-6">
+            <label for="due_date" class="block text-gray-700 text-sm font-medium mb-2">Due Date (Optional):</label>
+            <input type="date" id="due_date" name="due_date"
+                   class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                   aria-label="Due date for assignment">
+        </div>
+
+        <div class="flex items-center justify-between">
+            <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 w-full">
+                Assign Course
+            </button>
+        </div>
+    </form>
+
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('assign_training_options') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
+            Back to Assign Options
+        </a>
+    </div>
+
+    <script>
+        function filterTraineeList() {
+            const selectedDomain = document.getElementById('trainee-domain-filter').value;
+            const traineeItems = document.querySelectorAll('.trainee-item');
+
+            traineeItems.forEach(item => {
+                const traineeDomain = item.dataset.domain;
+                if (selectedDomain === 'all' || traineeDomain === selectedDomain) {
+                    item.style.display = 'flex'; // Show
+                } else {
+                    item.style.display = 'none'; // Hide
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', filterTraineeList); // Apply filter on page load
+    </script>
+{% endblock %}
