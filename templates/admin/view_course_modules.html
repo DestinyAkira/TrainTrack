@@ -42,8 +42,8 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <a href="#" class="text-blue-600 hover:text-blue-900 mr-4">Edit</a>
-                            <a href="#" class="text-red-600 hover:text-red-900">Delete</a>
+                            <a href="#" class="text-blue-600 hover:text-blue-900 mr-4">Edit</a> {# TODO: Implement edit module functionality #}
+                            <a href="#" onclick="event.preventDefault(); showDeleteConfirmation('{{ url_for('delete_module', module_id=module.id) }}', '{{ module.name }}');" class="text-red-600 hover:text-red-900">Delete</a>
                         </td>
                     </tr>
                     {% endfor %}

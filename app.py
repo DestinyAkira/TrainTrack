@@ -201,7 +201,7 @@ class Assessment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    type = db.Column(db.String(50), nullable=False) # e.g., 'multiple_choice', 'open_ended'
+    # Removed 'type' column from Assessment model
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True) # Optional: if part of a course
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Admin who created it
@@ -687,6 +687,43 @@ def edit_course(course_id):
 
     return render_template('admin/edit_course.html', title='Edit Course', course=course, domains=all_domains, current_year=current_year)
 
+@app.route('/admin/courses/<int:course_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_course(course_id):
+    """
+    Deletes a course and its associated modules, assessments, and assignments.
+    """
+    course = db.session.get(Course, course_id)
+    if course is None:
+        flash('Course not found.', 'danger')
+        return redirect(url_for('admin_view_courses'))
+
+    try:
+        # Delete associated Modules
+        Module.query.filter_by(course_id=course.id).delete()
+        
+        # Delete associated Assessments (if linked to this course)
+        Assessment.query.filter_by(course_id=course.id).delete()
+
+        # Delete associated Assignments
+        Assignment.query.filter_by(course_id=course.id).delete()
+
+        # Remove from Learning Paths (disassociate, not delete LearningPath itself)
+        # This requires iterating through learning paths and removing the course
+        for lp in course.learning_paths:
+            lp.courses.remove(course)
+        
+        db.session.delete(course)
+        db.session.commit()
+        flash(f'Course "{course.name}" and all associated data deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the course: {e}', 'danger')
+        app.logger.error(f"Course deletion error: {e}")
+    
+    return redirect(url_for('admin_view_courses'))
+
 
 @app.route('/admin/courses/<int:course_id>/modules')
 @login_required
@@ -742,6 +779,34 @@ def create_module(course_id):
 
     return render_template('admin/create_module.html', title='Create New Module', course=course, current_year=current_year)
 
+@app.route('/admin/modules/<int:module_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_module(module_id):
+    """
+    Deletes a module and its associated trainee completion records.
+    """
+    module = db.session.get(Module, module_id)
+    if module is None:
+        flash('Module not found.', 'danger')
+        return redirect(url_for('admin_view_courses')) # Redirect to courses if module not found
+
+    course_id = module.course_id # Store for redirection
+
+    try:
+        # Delete associated TraineeModuleCompletion records
+        TraineeModuleCompletion.query.filter_by(module_id=module.id).delete()
+        
+        db.session.delete(module)
+        db.session.commit()
+        flash(f'Module "{module.name}" deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the module: {e}', 'danger')
+        app.logger.error(f"Module deletion error: {e}")
+    
+    return redirect(url_for('admin_view_course_modules', course_id=course_id))
+
 
 @app.route('/admin/assessments')
 @login_required
@@ -769,12 +834,12 @@ def create_assessment():
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
-        assessment_type = request.form.get('type')
+        # Removed assessment_type from form data
         course_id = request.form.get('course_id')
 
         # Basic validation
-        if not name or not assessment_type:
-            flash('Assessment name and type are required.', 'danger')
+        if not name: # Removed assessment_type from validation
+            flash('Assessment name is required.', 'danger')
             return render_template('admin/create_assessment.html', title='Create New Assessment', courses=courses, current_year=current_year)
 
         # Convert course_id to integer if provided, otherwise set to None
@@ -783,7 +848,7 @@ def create_assessment():
         new_assessment = Assessment(
             name=name,
             description=description,
-            type=assessment_type,
+            # Removed type from Assessment creation
             course_id=course_id,
             created_by_id=current_user.id
         )
@@ -817,11 +882,11 @@ def edit_assessment(assessment_id):
     if request.method == 'POST':
         assessment.name = request.form.get('name')
         assessment.description = request.form.get('description')
-        assessment.type = request.form.get('type')
+        # Removed assessment.type from form data
         course_id = request.form.get('course_id')
 
-        if not assessment.name or not assessment.type:
-            flash('Assessment name and type are required.', 'danger')
+        if not assessment.name: # Removed assessment.type from validation
+            flash('Assessment name is required.', 'danger')
             return render_template('admin/edit_assessment.html', title='Edit Assessment', assessment=assessment, courses=courses, current_year=current_year)
         
         assessment.course_id = int(course_id) if course_id else None
@@ -836,6 +901,46 @@ def edit_assessment(assessment_id):
             app.logger.error(f"Assessment update error: {e}")
 
     return render_template('admin/edit_assessment.html', title='Edit Assessment', assessment=assessment, courses=courses, current_year=current_year)
+
+@app.route('/admin/assessments/<int:assessment_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_assessment(assessment_id):
+    """
+    Deletes an assessment and its associated questions and submissions.
+    """
+    assessment = db.session.get(Assessment, assessment_id)
+    if assessment is None:
+        flash('Assessment not found.', 'danger')
+        return redirect(url_for('admin_view_assessments'))
+
+    try:
+        # Delete associated Questions
+        Question.query.filter_by(assessment_id=assessment.id).delete()
+        
+        # Delete associated Submissions
+        # Note: Submissions are linked to Assignment and Question.
+        # When Question is deleted, submissions linked to it should ideally be handled by cascade.
+        # But for safety, explicitly delete submissions related to this assessment's questions.
+        # This requires a more complex query or iterating if not using cascade.
+        # For simplicity, let's assume direct deletion of submissions for this assessment's questions.
+        # A more robust solution would involve SQLAlchemy's cascade.
+        submissions_to_delete = db.session.query(Submission).join(Question).filter(Question.assessment_id == assessment.id).all()
+        for submission in submissions_to_delete:
+            db.session.delete(submission)
+
+        # Delete associated Assignments that are directly for this assessment
+        Assignment.query.filter_by(assessment_id=assessment.id).delete()
+
+        db.session.delete(assessment)
+        db.session.commit()
+        flash(f'Assessment "{assessment.name}" and all associated data deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the assessment: {e}', 'danger')
+        app.logger.error(f"Assessment deletion error: {e}")
+    
+    return redirect(url_for('admin_view_assessments'))
 
 
 @app.route('/admin/assessments/<int:assessment_id>/questions/new', methods=['GET', 'POST'])
@@ -903,6 +1008,133 @@ def create_question(assessment_id):
             app.logger.error(f"Question creation error: {e}")
 
     return render_template('admin/create_question.html', title='Add Question', assessment=assessment, current_year=current_year)
+
+
+@app.route('/admin/learning_paths')
+@login_required
+@admin_required
+def admin_view_learning_paths():
+    """
+    Allows admins to view all learning paths.
+    """
+    current_year = datetime.now().year
+    learning_paths = db.session.query(LearningPath).all()
+    return render_template('admin/view_learning_paths.html', title='Manage Learning Paths', learning_paths=learning_paths, current_year=current_year)
+
+@app.route('/admin/learning_paths/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_learning_path():
+    """
+    Handles the creation of a new learning path by an admin.
+    """
+    current_year = datetime.now().year
+    courses = db.session.query(Course).all() # Get all courses to allow selection for the path
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        selected_course_ids = request.form.getlist('courses') # Get list of selected course IDs
+
+        if not name:
+            flash('Learning Path name is required.', 'danger')
+            return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
+
+        new_path = LearningPath(
+            name=name,
+            description=description,
+            created_by_id=current_user.id
+        )
+
+        try:
+            # Add courses to the learning path
+            for course_id in selected_course_ids:
+                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
+                if course:
+                    new_path.courses.append(course)
+            
+            db.session.add(new_path)
+            db.session.commit()
+            flash(f'Learning Path "{name}" created successfully!', 'success')
+            return redirect(url_for('admin_view_learning_paths'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'An error occurred while creating the learning path: {e}', 'danger')
+            app.logger.error(f"Learning Path creation error: {e}")
+
+    return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
+
+@app.route('/admin/learning_paths/<int:path_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_learning_path(path_id):
+    """
+    Allows an admin to edit an existing learning path, including its associated courses.
+    """
+    current_year = datetime.now().year
+    learning_path = db.session.get(LearningPath, path_id) # Fix: Use db.session.get()
+    if learning_path is None:
+        abort(404)
+    all_courses = db.session.query(Course).all() # All courses available for selection
+
+    if request.method == 'POST':
+        learning_path.name = request.form.get('name')
+        learning_path.description = request.form.get('description')
+        selected_course_ids = request.form.getlist('courses')
+
+        if not learning_path.name:
+            flash('Learning Path name is required.', 'danger')
+            return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
+        
+        try:
+            # Clear existing courses and add new ones
+            learning_path.courses.clear()
+            for course_id in selected_course_ids:
+                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
+                if course:
+                    learning_path.courses.append(course)
+            
+            db.session.commit()
+            flash(f'Learning Path "{learning_path.name}" updated successfully!', 'success')
+            return redirect(url_for('admin_view_learning_paths'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'An error occurred while updating the learning path: {e}', 'danger')
+            app.logger.error(f"Learning Path update error: {e}")
+
+    return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
+
+@app.route('/admin/learning_paths/<int:path_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_learning_path(path_id):
+    """
+    Deletes a learning path and its associated assignments.
+    """
+    learning_path = db.session.get(LearningPath, path_id)
+    if learning_path is None:
+        flash('Learning Path not found.', 'danger')
+        return redirect(url_for('admin_view_learning_paths'))
+
+    try:
+        # Delete associated Assignments
+        Assignment.query.filter_by(learning_path_id=learning_path.id).delete()
+        
+        # Remove associations from learning_path_courses table
+        # This is handled by SQLAlchemy's relationship if configured with cascade="all, delete-orphan"
+        # but explicitly removing from the association table is safer if not.
+        learning_path.courses.clear() # Disassociate all courses
+
+        db.session.delete(learning_path)
+        db.session.commit()
+        flash(f'Learning Path "{learning_path.name}" and all associated data deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the learning path: {e}', 'danger')
+        app.logger.error(f"Learning Path deletion error: {e}")
+    
+    return redirect(url_for('admin_view_learning_paths'))
+
 
 @app.route('/admin/assign/options')
 @login_required
@@ -1085,101 +1317,6 @@ def assign_assessment_training():
             flash('No new assessment assignments were created.', 'info')
 
     return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
-
-
-@app.route('/admin/learning_paths')
-@login_required
-@admin_required
-def admin_view_learning_paths():
-    """
-    Allows admins to view all learning paths.
-    """
-    current_year = datetime.now().year
-    learning_paths = db.session.query(LearningPath).all()
-    return render_template('admin/view_learning_paths.html', title='Manage Learning Paths', learning_paths=learning_paths, current_year=current_year)
-
-@app.route('/admin/learning_paths/new', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def create_learning_path():
-    """
-    Handles the creation of a new learning path by an admin.
-    """
-    current_year = datetime.now().year
-    courses = db.session.query(Course).all() # Get all courses to allow selection for the path
-
-    if request.method == 'POST':
-        name = request.form.get('name')
-        description = request.form.get('description')
-        selected_course_ids = request.form.getlist('courses') # Get list of selected course IDs
-
-        if not name:
-            flash('Learning Path name is required.', 'danger')
-            return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
-
-        new_path = LearningPath(
-            name=name,
-            description=description,
-            created_by_id=current_user.id
-        )
-
-        try:
-            # Add courses to the learning path
-            for course_id in selected_course_ids:
-                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
-                if course:
-                    new_path.courses.append(course)
-            
-            db.session.add(new_path)
-            db.session.commit()
-            flash(f'Learning Path "{name}" created successfully!', 'success')
-            return redirect(url_for('admin_view_learning_paths'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'An error occurred while creating the learning path: {e}', 'danger')
-            app.logger.error(f"Learning Path creation error: {e}")
-
-    return render_template('admin/create_learning_path.html', title='Create New Learning Path', courses=courses, current_year=current_year)
-
-@app.route('/admin/learning_paths/<int:path_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_learning_path(path_id):
-    """
-    Allows an admin to edit an existing learning path, including its associated courses.
-    """
-    current_year = datetime.now().year
-    learning_path = db.session.get(LearningPath, path_id) # Fix: Use db.session.get()
-    if learning_path is None:
-        abort(404)
-    all_courses = db.session.query(Course).all() # All courses available for selection
-
-    if request.method == 'POST':
-        learning_path.name = request.form.get('name')
-        learning_path.description = request.form.get('description')
-        selected_course_ids = request.form.getlist('courses')
-
-        if not learning_path.name:
-            flash('Learning Path name is required.', 'danger')
-            return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
-        
-        try:
-            # Clear existing courses and add new ones
-            learning_path.courses.clear()
-            for course_id in selected_course_ids:
-                course = db.session.get(Course, int(course_id)) # Fix: Use db.session.get()
-                if course:
-                    learning_path.courses.append(course)
-            
-            db.session.commit()
-            flash(f'Learning Path "{learning_path.name}" updated successfully!', 'success')
-            return redirect(url_for('admin_view_learning_paths'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'An error occurred while updating the learning path: {e}', 'danger')
-            app.logger.error(f"Learning Path update error: {e}")
-
-    return render_template('admin/edit_learning_path.html', title='Edit Learning Path', learning_path=learning_path, all_courses=all_courses, current_year=current_year)
 
 
 @app.route('/admin/assign/learning_path', methods=['GET', 'POST'])
@@ -1813,6 +1950,47 @@ def edit_user(user_id):
 
     return render_template('admin/edit_user.html', title='Edit User', user_item=user_to_edit, current_year=current_year, domains=all_domains)
 
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    """
+    Deletes a user and all their associated data (assignments, submissions, notifications).
+    Prevents an admin from deleting their own account.
+    """
+    user_to_delete = db.session.get(User, user_id)
+    if user_to_delete is None:
+        flash('User not found.', 'danger')
+        return redirect(url_for('admin_view_users'))
+
+    if user_to_delete.id == current_user.id:
+        flash('You cannot delete your own account.', 'danger')
+        return redirect(url_for('admin_view_users'))
+
+    try:
+        # Delete related data first to avoid foreign key constraints
+        # Delete Assignments where this user is the trainee
+        Assignment.query.filter_by(trainee_id=user_to_delete.id).delete()
+        # Delete Submissions where this user is the grader
+        Submission.query.filter_by(graded_by_id=user_to_delete.id).delete()
+        # Delete Notifications where this user is the recipient or sender
+        Notification.query.filter_by(recipient_id=user_to_delete.id).delete()
+        Notification.query.filter_by(sender_id=user_to_delete.id).delete()
+
+        # If the user created courses/assessments/learning paths, these will remain
+        # unless explicit cascade rules or manual deletion logic is added.
+        # For this context, we assume content created by admins/support remains.
+
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        flash(f'User "{user_to_delete.username}" and all associated data deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the user: {e}', 'danger')
+        app.logger.error(f"User deletion error: {e}")
+    
+    return redirect(url_for('admin_view_users'))
+
 
 @app.route('/admin/users/<int:trainee_id>/progress')
 @login_required
@@ -1879,7 +2057,7 @@ def admin_view_trainee_progress(trainee_id):
                     'submission': submission,
                     'question': question
                 })
-        elif assignment.learning_path_id: # New logic for learning path progress
+        elif item.type == 'learning_path': # New logic for learning path progress
             learning_path = db.session.get(LearningPath, assignment.learning_path_id) # Fix: Use db.session.get()
             if learning_path is None:
                 abort(404)
@@ -2094,6 +2272,17 @@ def create_db():
                 db.session.commit()
             else:
                 print("'domain' column already exists in 'user' table.")
+
+            # Check if 'type' column exists in 'assessment' table and remove it
+            existing_assessment_columns = [column['name'] for column in inspector.get_columns("assessment")]
+            if "type" in existing_assessment_columns:
+                # SQLite does not support dropping columns directly without recreating the table.
+                # For simplicity in this context, we will ignore the column in the model
+                # and note that a proper migration tool (like Alembic) would handle this.
+                # If this were a production app, a full migration would be necessary.
+                print("Warning: 'type' column still exists in 'assessment' table in DB. Manual migration or Alembic needed for removal.")
+            else:
+                print("'type' column does not exist in 'assessment' table.")
 
 
         # Ensure all tables are created if they don't exist (e.g., if db file was just deleted or new tables added)

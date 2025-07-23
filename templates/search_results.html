@@ -60,7 +60,8 @@
                 <ul class="list-disc list-inside space-y-2">
                     {% for assessment in results.assessments %}
                         <li class="text-gray-700">
-                            <strong>{{ assessment.name }}</strong> ({{ assessment.type.replace('_', ' ').title() }}) - {{ assessment.description if assessment.description else 'No description.' }}
+                            {# Removed assessment.type from display #}
+                            <strong>{{ assessment.name }}</strong> - {{ assessment.description if assessment.description else 'No description.' }}
                             {% if assessment.course %}
                                 <span class="text-sm text-gray-500 ml-2">(Course: {{ assessment.course.name }})</span>
                             {% endif %}

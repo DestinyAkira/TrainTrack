@@ -6,7 +6,7 @@
     <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Manage Users</h1>
 
     <div class="mb-6 flex justify-end items-center">
-        <label for="domain-filter" class="block text-gray-700 text-sm font-medium mr-2">Filter Trainees by Domain:</label>
+        <label for="domain-filter" class="block text-gray-700 text-sm font-medium mr-2">Filter Users by Domain:</label>
         <select id="domain-filter" onchange="filterUsersByDomain(this.value)"
                 class="shadow-sm appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200">
             <option value="all" {% if not selected_domain or selected_domain == 'all' %}selected{% endif %}>All Domains</option>
@@ -45,7 +45,7 @@
                             {{ user_item.role.capitalize() }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {% if user_item.role == 'trainee' %}
+                            {% if user_item.role in ['trainee', 'admin'] %} {# Display domain for both trainees and admins #}
                                 {{ user_item.domain if user_item.domain else 'N/A' }}
                             {% else %}
                                 N/A
@@ -56,11 +56,11 @@
                                 <a href="{{ url_for('edit_user', user_id=user_item.id) }}" class="text-blue-600 hover:text-blue-900 mr-4">Edit</a>
                                 {% if user_item.id != current_user.id %} {# Prevent admin from deleting or resetting their own password #}
                                     <a href="{{ url_for('reset_user_password', user_id=user_item.id) }}" class="text-yellow-600 hover:text-yellow-900 mr-4">Reset Password</a>
-                                    <a href="#" class="text-red-600 hover:text-red-900">Delete</a> {# TODO: Implement delete functionality #}
+                                    <a href="#" onclick="event.preventDefault(); showDeleteConfirmation('{{ url_for('delete_user', user_id=user_item.id) }}', '{{ user_item.username }}');" class="text-red-600 hover:text-red-900">Delete</a>
                                 {% endif %}
                             {% endif %}
                             {% if user_item.role == 'trainee' and (current_user.role == 'admin' or current_user.role == 'support') %}
-                                <a href="{{ url_for('admin_view_trainee_progress', trainee_id=user_item.id) }}" class="text-purple-600 hover:text-purple-900">View Progress</a>
+                                <a href="{{ url_for('admin_view_trainee_progress', trainee_id=user_item.id) }}" class="text-purple-600 hover:text-purple-900 ml-4">View Progress</a>
                             {% endif %}
                         </td>
                     </tr>

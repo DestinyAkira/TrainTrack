@@ -44,28 +44,28 @@
 <body class="flex flex-col min-h-screen">
     <header class="bg-gray-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
-            <a href="{{ url_for('dashboard') }}" class="text-2xl font-bold text-indigo-300 hover:text-indigo-100 transition duration-300">TrainTrack</a>
+            <div class="flex items-center">
+                <button onclick="history.back()" class="text-white hover:text-gray-300 mr-4 px-3 py-2 rounded-md transition duration-300 focus:outline-none" aria-label="Go back">
+                    <i class="fas fa-arrow-left text-xl"></i>
+                </button>
+                <a href="{{ url_for('dashboard') }}" class="text-2xl font-bold text-indigo-300 hover:text-indigo-100 transition duration-300">TrainTrack</a>
+            </div>
             <nav>
                 <ul class="flex space-x-4">
                     {% if current_user.is_authenticated %}
                         <li><a href="{{ url_for('dashboard') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Dashboard</a></li>
                         
-                        {# Admin Links #}
+                        {# Admin Links - Removed as requested #}
+                        {#
                         {% if current_user.role == 'admin' %}
-                            <li class="relative group">
-                                <button class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300 focus:outline-none">
-                                    Admin <i class="fas fa-caret-down ml-1"></i>
-                                </button>
-                                <ul class="absolute hidden group-hover:block bg-gray-700 text-white rounded-md shadow-lg py-2 z-10 min-w-[160px]">
-                                    <li><a href="{{ url_for('admin_view_users') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Users</a></li>
-                                    <li><a href="{{ url_for('admin_view_courses') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Courses</a></li>
-                                    <li><a href="{{ url_for('admin_view_assessments') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Assessments</a></li>
-                                    <li><a href="{{ url_for('admin_view_learning_paths') }}" class="block px-4 py-2 hover:bg-gray-600">Manage Learning Paths</a></li>
-                                    <li><a href="{{ url_for('assign_training_options') }}" class="block px-4 py-2 hover:bg-gray-600">Assign Training</a></li>
-                                    <li><a href="{{ url_for('grade_assessments') }}" class="block px-4 py-2 hover:bg-gray-600">Grade Assessments</a></li>
-                                </ul>
-                            </li>
+                            <li><a href="{{ url_for('admin_view_users') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Manage Users</a></li>
+                            <li><a href="{{ url_for('admin_view_courses') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Manage Courses</a></li>
+                            <li><a href="{{ url_for('admin_view_assessments') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Manage Assessments</a></li>
+                            <li><a href="{{ url_for('admin_view_learning_paths') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Manage Learning Paths</a></li>
+                            <li><a href="{{ url_for('assign_training_options') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Assign Training</a></li>
+                            <li><a href="{{ url_for('grade_assessments') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Grade Assessments</a></li>
                         {% endif %}
+                        #}
 
                         {# Support Links #}
                         {% if current_user.role == 'support' %}
@@ -107,17 +107,10 @@
                             </form>
                         </li>
 
-                        {# User Dropdown #}
-                        <li class="relative group">
-                            <button class="flex items-center hover:text-gray-300 px-3 py-2 rounded-md transition duration-300 focus:outline-none">
-                                <i class="fas fa-user-circle text-xl mr-2"></i>
-                                {{ current_user.username }} <i class="fas fa-caret-down ml-1"></i>
-                            </button>
-                            <ul class="absolute hidden group-hover:block bg-gray-700 text-white rounded-md shadow-lg py-2 right-0 z-10 min-w-[160px]">
-                                <li><a href="{{ url_for('logout') }}" class="block px-4 py-2 hover:bg-gray-600">Logout</a></li>
-                            </ul>
-                        </li>
+                        {# Logout Link #}
+                        <li><a href="{{ url_for('logout') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Logout</a></li>
                     {% else %}
+                        {# Login and Register Links for unauthenticated users #}
                         <li><a href="{{ url_for('login') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Login</a></li>
                         <li><a href="{{ url_for('register') }}" class="hover:text-gray-300 px-3 py-2 rounded-md transition duration-300">Register</a></li>
                     {% endif %}

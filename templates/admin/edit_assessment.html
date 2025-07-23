@@ -17,16 +17,7 @@
                       class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
                       aria-label="Assessment description textarea">{{ assessment.description }}</textarea>
         </div>
-        <div class="mb-5">
-            <label for="type" class="block text-gray-700 text-sm font-medium mb-2">Assessment Type:</label>
-            <select id="type" name="type" required
-                    class="shadow-sm appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
-                    aria-label="Assessment type select">
-                <option value="multiple_choice" {% if assessment.type == 'multiple_choice' %}selected{% endif %}>Multiple Choice</option>
-                <option value="open_ended" {% if assessment.type == 'open_ended' %}selected{% endif %}>Open-Ended</option>
-                <option value="true_false" {% if assessment.type == 'true_false' %}selected{% endif %}>True/False</option>
-            </select>
-        </div>
+        {# Removed Assessment Type field #}
         <div class="mb-6">
             <label for="course_id" class="block text-gray-700 text-sm font-medium mb-2">Link to Course (Optional):</label>
             <select id="course_id" name="course_id"
