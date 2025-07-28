@@ -3,47 +3,40 @@
 {% block title %}Assign Training Options{% endblock %}
 
 {% block content %}
-    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center animate-fade-in">Assign Training</h1>
-    <p class="text-lg text-gray-600 mb-8 text-center animate-fade-in delay-100">Choose what type of training you want to assign.</p>
+    <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">Assign Training Options</h1>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
-        <a href="{{ url_for('assign_course_training') }}" class="block p-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl shadow-lg border border-blue-300 text-center transform hover:scale-105 transition-all duration-300 animate-pop-in delay-200">
-            <div class="p-4 bg-blue-500 rounded-full inline-block mb-4 shadow-md">
-                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13.622c0 .288.303.53.581.382l7.636-4.22c.28-.155.28-.567 0-.722L12.581 6.39c-.278-.148-.581.094-.581.382z"></path></svg>
-            </div>
-            <h2 class="text-2xl font-semibold text-blue-800 mb-2">Assign Courses</h2>
-            <p class="text-gray-700">Assign full training courses to trainees.</p>
-        </a>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+        <div class="bg-blue-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Assign Courses</h2>
+            <p class="text-gray-700 mb-6">Assign individual courses to trainees.</p>
+            <a href="{{ url_for('assign_training', training_type='course') }}"
+               class="inline-block bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700 transition duration-300 shadow-md">
+                Go to Courses
+            </a>
+        </div>
 
-        <a href="{{ url_for('assign_assessment_training') }}" class="block p-8 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl shadow-lg border border-purple-300 text-center transform hover:scale-105 transition-all duration-300 animate-pop-in delay-300">
-            <div class="p-4 bg-purple-500 rounded-full inline-block mb-4 shadow-md">
-                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-            </div>
-            <h2 class="text-2xl font-semibold text-purple-800 mb-2">Assign Assessments</h2>
-            <p class="text-gray-700">Assign individual assessments or quizzes to trainees.</p>
-        </a>
+        <div class="bg-green-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-green-700 mb-4">Assign Assessments</h2>
+            <p class="text-gray-700 mb-6">Assign individual assessments or quizzes to trainees.</p>
+            <a href="{{ url_for('assign_training', training_type='assessment') }}"
+               class="inline-block bg-green-600 text-white px-6 py-3 rounded-md font-medium hover:bg-green-700 transition duration-300 shadow-md">
+                Go to Assessments
+            </a>
+        </div>
+
+        <div class="bg-purple-50 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center hover:shadow-xl transition-shadow duration-300">
+            <h2 class="text-2xl font-semibold text-purple-700 mb-4">Assign Learning Paths</h2>
+            <p class="text-gray-700 mb-6">Assign a collection of courses as a structured learning path.</p>
+            <a href="{{ url_for('assign_training', training_type='learning_path') }}"
+               class="inline-block bg-purple-600 text-white px-6 py-3 rounded-md font-medium hover:bg-purple-700 transition duration-300 shadow-md">
+                Go to Learning Paths
+            </a>
+        </div>
     </div>
 
-    <div class="mt-10 text-center animate-fade-in delay-400">
+    <div class="mt-10 text-center">
         <a href="{{ url_for('dashboard') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-md font-medium hover:bg-gray-300 transition duration-300 shadow-sm">
             Back to Dashboard
         </a>
     </div>
-
-    <style>
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes popIn {
-            from { opacity: 0; transform: scale(0.8); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
-        .animate-pop-in { animation: popIn 0.5s ease-out forwards; }
-        .delay-100 { animation-delay: 0.1s; }
-        .delay-200 { animation-delay: 0.2s; }
-        .delay-300 { animation-delay: 0.3s; }
-        .delay-400 { animation-delay: 0.4s; }
-    </style>
 {% endblock %}

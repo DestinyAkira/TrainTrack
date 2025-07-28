@@ -54,7 +54,7 @@
                     aria-label="Select assessment">
                 <option value="">-- Select Assessment --</option>
                 {% for assessment in assessments %}
-                    <option value="{{ assessment.id }}">{{ assessment.name }} ({{ assessment.type.replace('_', ' ').title() }})</option>
+                    <option value="{{ assessment.id }}">{{ assessment.name }}</option> {# Removed ({{ assessment.type.replace('_', ' ').title() }}) #}
                 {% endfor %}
             </select>
         </div>

@@ -15,7 +15,8 @@ from sqlalchemy.orm import relationship # Import relationship for many-to-many
 app = Flask(__name__)
 
 # Configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key_for_dev') # Use environment variable for production
+# Hardcoded SECRET_KEY for standalone app (less secure for production, but simpler for distribution)
+app.config['SECRET_KEY'] = 'your_super_secret_key_hardcoded' # REPLACE WITH A STRONG, UNIQUE KEY FOR PRODUCTION!
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///traintrack.db' # SQLite database
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -28,9 +29,9 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' # Redirect to login page if not authenticated
 login_manager.login_message_category = 'info'
 
-# Define passcodes for admin and support roles (use environment variables in production)
-ADMIN_PASSCODE = os.environ.get('ADMIN_PASSCODE', 'admincode') # Default for dev
-SUPPORT_PASSCODE = os.environ.get('SUPPORT_PASSCODE', 'supportcode') # Default for dev
+# Define passcodes for admin and support roles (hardcoded for standalone app)
+ADMIN_PASSCODE = 'admincode'
+SUPPORT_PASSCODE = 'supportcode'
 
 # Define predefined domains
 PREDEFINED_DOMAINS = ['Data Collection', 'Data Cleaning', 'Data Engineering', 'Compliance', 'Marketing', 'Sales', 'Human Resources', 'Finance']
@@ -568,7 +569,7 @@ def dashboard():
     return render_template('dashboard.html', 
                            title='Dashboard', 
                            user=current_user, 
-                           current_year=current_year,
+                           current_year=datetime.now().year,
                            dashboard_data=dashboard_data,
                            leaderboard_data=leaderboard_data) # Pass leaderboard data
 
@@ -923,7 +924,6 @@ def delete_assessment(assessment_id):
         # When Question is deleted, submissions linked to it should ideally be handled by cascade.
         # But for safety, explicitly delete submissions related to this assessment's questions.
         # This requires a more complex query or iterating if not using cascade.
-        # For simplicity, let's assume direct deletion of submissions for this assessment's questions.
         # A more robust solution would involve SQLAlchemy's cascade.
         submissions_to_delete = db.session.query(Submission).join(Question).filter(Question.assessment_id == assessment.id).all()
         for submission in submissions_to_delete:
@@ -1144,192 +1144,23 @@ def assign_training_options():
     Provides options for admins to choose between assigning a course or an assessment.
     """
     current_year = datetime.now().year
+    # All links now point to the unified assign_training route
     return render_template('admin/assign_training_options.html', title='Assign Training Options', current_year=current_year)
 
 
-@app.route('/admin/assign/course', methods=['GET', 'POST'])
+@app.route('/admin/assign_training', methods=['GET', 'POST'])
 @login_required
 @admin_required
-def assign_course_training():
+def assign_training():
     """
-    Allows admins to assign courses to trainees.
-    Creates notifications for trainees upon assignment.
+    Allows admins to assign courses, assessments, or learning paths to trainees
+    using a single form. Creates notifications for trainees upon assignment.
     """
     current_year = datetime.now().year
     trainees = db.session.query(User).filter_by(role='trainee').all()
     courses = db.session.query(Course).all()
-
-    # Get all unique domains for the datalist for filtering trainees
-    existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
-    existing_trainee_domains = [d[0] for d in existing_trainee_domains if d[0] is not None]
-    all_trainee_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_trainee_domains)))
-
-    if request.method == 'POST':
-        trainee_ids = request.form.getlist('trainee_ids') # Get a list of selected trainee IDs
-        course_id = request.form.get('course_id')
-        due_date_str = request.form.get('due_date')
-
-        if not trainee_ids or not course_id:
-            flash('Please select at least one trainee and a course.', 'danger')
-            return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
-
-        try:
-            course_id_int = int(course_id)
-            due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
-        except (ValueError, TypeError):
-            flash('Invalid course ID or due date format.', 'danger')
-            return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
-
-        assigned_count = 0
-        course_name = db.session.get(Course, course_id_int).name # Fix: Use db.session.get()
-
-        for trainee_id in trainee_ids:
-            try:
-                trainee_id_int = int(trainee_id)
-                
-                # Check for existing assignment to prevent duplicates
-                existing_assignment = db.session.query(Assignment).filter_by(
-                    trainee_id=trainee_id_int,
-                    course_id=course_id_int
-                ).first()
-
-                if existing_assignment:
-                    flash(f'Course "{course_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
-                    continue # Skip to the next trainee
-
-                new_assignment = Assignment(
-                    trainee_id=trainee_id_int,
-                    course_id=course_id_int,
-                    assigned_by_id=current_user.id,
-                    due_date=due_date
-                )
-
-                db.session.add(new_assignment)
-                db.session.flush() # Flush to get new_assignment.id for notification
-
-                # Create notification for the trainee
-                notification = Notification(
-                    recipient_id=trainee_id_int,
-                    sender_id=current_user.id,
-                    message=f'You have been assigned a new course: "{course_name}".',
-                    type='assignment_assigned',
-                    related_id=new_assignment.id
-                )
-                db.session.add(notification)
-                assigned_count += 1
-
-            except ValueError:
-                flash(f'Invalid trainee ID: {trainee_id}. Skipping.', 'danger')
-                continue
-
-        if assigned_count > 0:
-            db.session.commit()
-            flash(f'{assigned_count} course assignments created successfully!', 'success')
-            return redirect(url_for('dashboard')) # Or a page to view assignments
-        else:
-            db.session.rollback()
-            flash('No new course assignments were created.', 'info')
-
-    return render_template('admin/assign_course_training.html', title='Assign Course', trainees=trainees, courses=courses, current_year=current_year, trainee_domains=all_trainee_domains)
-
-
-@app.route('/admin/assign/assessment', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def assign_assessment_training():
-    """
-    Allows admins to assign assessments to trainees.
-    Creates notifications for trainees upon assignment.
-    """
-    current_year = datetime.now().year
-    trainees = db.session.query(User).filter_by(role='trainee').all()
     assessments = db.session.query(Assessment).all()
-
-    # Get all unique domains for the datalist for filtering trainees
-    existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
-    existing_trainee_domains = [d[0] for d in existing_trainee_domains if d[0] is not None]
-    all_trainee_domains = sorted(list(set(PREDEFINED_DOMAINS + existing_trainee_domains)))
-
-    if request.method == 'POST':
-        trainee_ids = request.form.getlist('trainee_ids') # Get a list of selected trainee IDs
-        assessment_id = request.form.get('assessment_id')
-        due_date_str = request.form.get('due_date')
-
-        if not trainee_ids or not assessment_id:
-            flash('Please select at least one trainee and an assessment.', 'danger')
-            return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
-
-        try:
-            assessment_id_int = int(assessment_id)
-            due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
-        except (ValueError, TypeError):
-            flash('Invalid assessment ID or due date format.', 'danger')
-            return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
-
-        assigned_count = 0
-        assessment_name = db.session.get(Assessment, assessment_id_int).name # Fix: Use db.session.get()
-
-        for trainee_id in trainee_ids:
-            try:
-                trainee_id_int = int(trainee_id)
-                
-                # Check for existing assignment to prevent duplicates
-                existing_assignment = db.session.query(Assignment).filter_by(
-                    trainee_id=trainee_id_int,
-                    assessment_id=assessment_id_int
-                ).first()
-
-                if existing_assignment:
-                    flash(f'Assessment "{assessment_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
-                    continue # Skip to the next trainee
-
-                new_assignment = Assignment(
-                    trainee_id=trainee_id_int,
-                    assessment_id=assessment_id_int,
-                    assigned_by_id=current_user.id,
-                    due_date=due_date
-                )
-
-                db.session.add(new_assignment)
-                db.session.flush() # Flush to get new_assignment.id for notification
-
-                # Create notification for the trainee
-                notification = Notification(
-                    recipient_id=trainee_id_int,
-                    sender_id=current_user.id,
-                    message=f'You have been assigned a new assessment: "{assessment_name}".',
-                    type='assignment_assigned',
-                    related_id=new_assignment.id
-                )
-                db.session.add(notification)
-                assigned_count += 1
-
-            except ValueError:
-                flash(f'Invalid trainee ID: {trainee_id}. Skipping.', 'danger')
-                continue
-
-        if assigned_count > 0:
-            db.session.commit()
-            flash(f'{assigned_count} assessment assignments created successfully!', 'success')
-            return redirect(url_for('dashboard')) # Or a page to view assignments
-        else:
-            db.session.rollback()
-            flash('No new assessment assignments were created.', 'info')
-
-    return render_template('admin/assign_assessment_training.html', title='Assign Assessment', trainees=trainees, assessments=assessments, current_year=current_year, trainee_domains=all_trainee_domains)
-
-
-@app.route('/admin/assign/learning_path', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def assign_learning_path_training():
-    """
-    Allows admins to assign learning paths to trainees.
-    Creates notifications for trainees upon assignment.
-    """
-    current_year = datetime.now().year
-    trainees = db.session.query(User).filter_by(role='trainee').all()
-    learning_paths = db.session.query(LearningPath).all()
+    learning_paths = db.session.query(LearningPath).all() # Fetch learning paths
 
     # Get all unique domains for the datalist for filtering trainees
     existing_trainee_domains = db.session.query(User.domain).filter(User.role == 'trainee').distinct().all()
@@ -1338,71 +1169,114 @@ def assign_learning_path_training():
 
     if request.method == 'POST':
         trainee_ids = request.form.getlist('trainee_ids')
-        learning_path_id = request.form.get('learning_path_id')
+        training_type = request.form.get('training_type')
+        training_id = request.form.get('training_id')
         due_date_str = request.form.get('due_date')
 
-        if not trainee_ids or not learning_path_id:
-            flash('Please select at least one trainee and a learning path.', 'danger')
-            return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
+        if not trainee_ids or not training_type or not training_id:
+            flash('Please select at least one trainee, a training type, and a specific training item.', 'danger')
+            return render_template('admin/assign_training.html', title='Assign Training', trainees=trainees, courses=courses, assessments=assessments, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
 
         try:
-            learning_path_id_int = int(learning_path_id)
+            training_id_int = int(training_id)
             due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
         except (ValueError, TypeError):
-            flash('Invalid learning path ID or due date format.', 'danger')
-            return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
+            flash('Invalid training ID or due date format.', 'danger')
+            return render_template('admin/assign_training.html', title='Assign Training', trainees=trainees, courses=courses, assessments=assessments, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
 
         assigned_count = 0
-        learning_path_name = db.session.get(LearningPath, learning_path_id_int).name # Fix: Use db.session.get()
+        training_item_name = ""
 
         for trainee_id in trainee_ids:
             try:
                 trainee_id_int = int(trainee_id)
+                new_assignment = None
+                notification_message = ""
                 
-                # Check for existing assignment to prevent duplicates
-                existing_assignment = db.session.query(Assignment).filter_by(
-                    trainee_id=trainee_id_int,
-                    learning_path_id=learning_path_id_int
-                ).first()
-
-                if existing_assignment:
-                    flash(f'Learning Path "{learning_path_name}" already assigned to trainee ID {trainee_id}. Skipping.', 'info')
+                # Check for existing assignment to prevent duplicates and determine name
+                if training_type == 'course':
+                    training_item = db.session.get(Course, training_id_int)
+                    if training_item:
+                        training_item_name = training_item.name
+                        existing_assignment = db.session.query(Assignment).filter_by(
+                            trainee_id=trainee_id_int, course_id=training_id_int
+                        ).first()
+                        if not existing_assignment:
+                            new_assignment = Assignment(
+                                trainee_id=trainee_id_int, course_id=training_id_int,
+                                assigned_by_id=current_user.id, due_date=due_date
+                            )
+                            notification_message = f'You have been assigned a new course: "{training_item_name}".'
+                elif training_type == 'assessment':
+                    training_item = db.session.get(Assessment, training_id_int)
+                    if training_item:
+                        training_item_name = training_item.name
+                        existing_assignment = db.session.query(Assignment).filter_by(
+                            trainee_id=trainee_id_int, assessment_id=training_id_int
+                        ).first()
+                        if not existing_assignment:
+                            new_assignment = Assignment(
+                                trainee_id=trainee_id_int, assessment_id=training_id_int,
+                                assigned_by_id=current_user.id, due_date=due_date
+                            )
+                            notification_message = f'You have been assigned a new assessment: "{training_item_name}".'
+                elif training_type == 'learning_path':
+                    training_item = db.session.get(LearningPath, training_id_int)
+                    if training_item:
+                        training_item_name = training_item.name
+                        existing_assignment = db.session.query(Assignment).filter_by(
+                            trainee_id=trainee_id_int, learning_path_id=training_id_int
+                        ).first()
+                        if not existing_assignment:
+                            new_assignment = Assignment(
+                                trainee_id=trainee_id_int, learning_path_id=training_id_int,
+                                assigned_by_id=current_user.id, due_date=due_date
+                            )
+                            notification_message = f'You have been assigned a new learning path: "{training_item_name}".'
+                else:
+                    flash(f'Invalid training type selected: {training_type}. Skipping.', 'danger')
                     continue
 
-                new_assignment = Assignment(
-                    trainee_id=trainee_id_int,
-                    learning_path_id=learning_path_id_int,
-                    assigned_by_id=current_user.id,
-                    due_date=due_date
-                )
+                if new_assignment:
+                    db.session.add(new_assignment)
+                    db.session.flush() # Flush to get new_assignment.id for notification
 
-                db.session.add(new_assignment)
-                db.session.flush()
-
-                # Create notification for the trainee
-                notification = Notification(
-                    recipient_id=trainee_id_int,
-                    sender_id=current_user.id,
-                    message=f'You have been assigned a new learning path: "{learning_path_name}".',
-                    type='assignment_assigned',
-                    related_id=new_assignment.id
-                )
-                db.session.add(notification)
-                assigned_count += 1
+                    notification = Notification(
+                        recipient_id=trainee_id_int,
+                        sender_id=current_user.id,
+                        message=notification_message,
+                        type='assignment_assigned',
+                        related_id=new_assignment.id
+                    )
+                    db.session.add(notification)
+                    assigned_count += 1
+                elif existing_assignment:
+                    flash(f'{training_type.capitalize()} "{training_item_name}" already assigned to trainee {db.session.get(User, trainee_id_int).username}. Skipping.', 'info')
 
             except ValueError:
                 flash(f'Invalid trainee ID: {trainee_id}. Skipping.', 'danger')
                 continue
+            except Exception as e:
+                flash(f'An unexpected error occurred for trainee {trainee_id}: {e}', 'danger')
+                app.logger.error(f"Error assigning training to trainee {trainee_id}: {e}")
+                continue
 
         if assigned_count > 0:
             db.session.commit()
-            flash(f'{assigned_count} learning path assignments created successfully!', 'success')
+            flash(f'{assigned_count} {training_type} assignments created successfully!', 'success')
             return redirect(url_for('dashboard'))
         else:
             db.session.rollback()
-            flash('No new learning path assignments were created.', 'info')
+            flash('No new assignments were created.', 'info')
 
-    return render_template('admin/assign_learning_path_training.html', title='Assign Learning Path', trainees=trainees, learning_paths=learning_paths, current_year=current_year, trainee_domains=all_trainee_domains)
+    return render_template('admin/assign_training.html', 
+                           title='Assign Training', 
+                           trainees=trainees, 
+                           courses=courses, 
+                           assessments=assessments, 
+                           learning_paths=learning_paths, # Pass learning paths to template
+                           current_year=current_year, 
+                           trainee_domains=all_trainee_domains)
 
 
 # --- Trainee Routes ---
@@ -1623,8 +1497,7 @@ def submit_assignment(assignment_id):
                     related_id=assignment.id
                 )
                 db.session.add(notification)
-
-
+            
         db.session.commit()
         flash('Your assessment has been submitted successfully!', 'success')
         if has_open_ended:
@@ -2057,7 +1930,7 @@ def admin_view_trainee_progress(trainee_id):
                     'submission': submission,
                     'question': question
                 })
-        elif item.type == 'learning_path': # New logic for learning path progress
+        elif item_data['type'] == 'learning_path': # New logic for learning path progress
             learning_path = db.session.get(LearningPath, assignment.learning_path_id) # Fix: Use db.session.get()
             if learning_path is None:
                 abort(404)
